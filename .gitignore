@@ -1,0 +1,25 @@
+# Node
+node_modules/
+dist/
+.vite/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Environment
+.env
+.env.*
+
+# Editor
+.vscode/
+.idea/
+
+# Application data
+workspace/*
+
+# OS
+.DS_Store
+Thumbs.db
