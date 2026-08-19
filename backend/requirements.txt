@@ -1,0 +1,15 @@
+# Research Workspace – backend dependencies
+# Install into a local .venv (see docs/002-backend-setup.md)
+
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+pydantic>=2.9.0
+pydantic-settings>=2.6.0
+
+# Document handling (install when you start opening PDFs / DOCX)
+pypdf>=5.0.0
+python-docx>=1.1.2
+
+# Optional later
+# aiofiles>=24.1.0
