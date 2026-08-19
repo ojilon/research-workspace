@@ -22,31 +22,34 @@ Organize references
 Export document
 ```
 
-## Phase 1 — Foundation (in progress on `restructure`)
+## Phase 1 — Foundation (mostly done on `restructure`)
 
-- [x] Frontend setup (Vite + React + TS)
+- [x] Frontend setup (Vite + React + TS + Tailwind)
 - [x] Shared TypeScript types
 - [x] Modern light / dark theme
 - [x] Resizable left file tree
 - [x] Centre tab bar (document + browser tabs)
-- [x] Right summary notes pane (editable, collapsible)
-- [x] Clean document rendering from sample topics
-- [ ] FastAPI backend skeleton
-- [ ] Local storage root selection
+- [x] Right summary pane with **its own tabs** (new tab = editable note)
+- [x] Both panes can show documents / notes
+- [x] Ctrl+S saves active note via FastAPI into storage root
+- [x] FastAPI skeleton + `.venv` instructions (`docs/002-backend-setup.md`)
+- [x] Local storage root (default `~/ResearchWorkspace`)
+- [x] Save link / bookmark into folder
+- [ ] Live file tree from backend (currently still sample data)
+- [ ] Pick storage root from the UI
 
 ## Phase 2 — Research Workspace (next)
 
-- Open websites via system browser (already possible) → later embedded WebView
-- Manage multiple sources in the file tree
-- Save links / bookmarks into folders
-- Display local documents (Markdown first)
-- Persist summary text and open tabs
-- Basic “copy selection → paste into summary” workflow
+- Load real tree from `GET /api/tree`
+- Open local Markdown files into note tabs
+- PDF open + text extraction (Python `pypdf`)
+- DOCX open (`python-docx`)
+- Frontend PDF viewer (later)
+- Drag text from centre → summary (copy/paste assist)
 
 ## Phase 3 — Documents
 
-- Markdown rendering improvements
-- Local PDF open + text extraction (Python)
+- Better Markdown rendering
 - Images in notes
 - References section
 - DOCX / PDF export
@@ -66,5 +69,5 @@ Export document
 
 ## Rule
 
-Each phase must produce **usable software** before the next phase begins.  
+Each phase must produce **usable software** before the next phase begins.
 No AI features until the reading + note-taking loop is comfortable.
