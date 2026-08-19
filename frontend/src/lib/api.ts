@@ -1,6 +1,12 @@
 import type { ExtractedDocument, FileTreeNode } from "../types";
 
-const BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
+/**
+ * Dev: Vite on :5173 talks to FastAPI on :8000.
+ * Packaged: UI is served by FastAPI itself → same origin, empty base.
+ */
+const BASE =
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.PROD ? "" : "http://127.0.0.1:8000");
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -73,7 +79,6 @@ export const api = {
       body: JSON.stringify({ relative_path }),
     }),
 
-  /** Native Windows Save As (name + extension). */
   saveAs: (default_name = "Untitled.md", relative_dir = "") =>
     request<{
       cancelled: boolean;
