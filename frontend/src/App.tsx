@@ -6,6 +6,7 @@ import TabBar from "./components/TabBar";
 import MainPanel from "./components/MainPanel";
 import BrowserTab from "./components/BrowserTab";
 import NoteEditor from "./components/NoteEditor";
+import type { OpenTarget } from "./components/FileTree";
 import { useTheme } from "./hooks/useTheme";
 import { useResizable } from "./hooks/useResizable";
 import { api } from "./lib/api";
@@ -43,14 +44,6 @@ function isUrlShortcut(path: string): boolean {
   return path.toLowerCase().endsWith(".url");
 }
 
-/**
- * Root application shell.
- *
- * - Live file tree from D:\\ResearchWorkspace (or fallback)
- * - Open .md → note tab on the summary side
- * - Open .url → browser tab
- * - Ctrl+S saves note and refreshes the tree
- */
 function App() {
   const { theme, toggleTheme } = useTheme();
 
@@ -60,10 +53,11 @@ function App() {
     maxWidth: 420,
     side: "left",
   });
+  // Wider max so summary can approach ~50% when tree is collapsed
   const right = useResizable({
-    initialWidth: 320,
-    minWidth: 220,
-    maxWidth: 560,
+    initialWidth: 360,
+    minWidth: 240,
+    maxWidth: 900,
     side: "right",
   });
 
@@ -105,6 +99,9 @@ function App() {
   const activeSummary =
     summaryTabs.find((t) => t.id === activeSummaryId) ?? null;
 
+  // When sidebar is collapsed, let summary grow so centre + summary ~50/50
+  const summaryFlexGrow = sidebarCollapsed && !summaryCollapsed;
+
   const refreshTree = useCallback(async () => {
     setTreeLoading(true);
     try {
@@ -118,7 +115,6 @@ function App() {
     }
   }, []);
 
-  // Connect to backend + load tree
   useEffect(() => {
     api
       .health()
@@ -133,7 +129,6 @@ function App() {
       .catch(() => setBackendOk(false));
   }, [refreshTree]);
 
-  // Ctrl+S
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
@@ -164,10 +159,13 @@ function App() {
     });
   }, []);
 
-  const openOrFocusSummaryNote = useCallback((tab: Tab) => {
+  const openOrFocusSummary = useCallback((tab: Tab) => {
     setSummaryTabs((prev) => {
       const existing = prev.find(
-        (t) => t.kind === "note" && t.path && t.path === tab.path
+        (t) =>
+          t.path &&
+          t.path === tab.path &&
+          t.kind === tab.kind
       );
       if (existing) {
         setActiveSummaryId(existing.id);
@@ -178,72 +176,103 @@ function App() {
     });
   }, []);
 
-  async function handleOpenNode(node: FileTreeNode) {
+  async function openTextAsNote(
+    node: FileTreeNode,
+    target: OpenTarget
+  ) {
+    if (!node.path) return;
+    const file = await api.readFile(node.path);
+    const tab: Tab = {
+      id: createId("note"),
+      title: node.name.replace(/\.(md|txt|markdown)$/i, ""),
+      kind: "note",
+      path: node.path,
+      content: file.content,
+      dirty: false,
+    };
+    if (target === "summary") openOrFocusSummary(tab);
+    else openOrFocusCenter(tab);
+  }
+
+  async function openLinkNode(node: FileTreeNode) {
+    if (!node.path) return;
+    let url = node.url;
+    if (!url) {
+      const file = await api.readFile(node.path);
+      url = parseUrlFile(file.content) ?? undefined;
+    }
+    if (!url) {
+      window.alert("Could not read URL from shortcut file.");
+      return;
+    }
+    openOrFocusCenter({
+      id: createId("tab"),
+      title: node.name.replace(/\.url$/i, ""),
+      kind: "browser",
+      url,
+      path: node.path,
+    });
+  }
+
+  async function handleOpenNode(
+    node: FileTreeNode,
+    target: OpenTarget = "center"
+  ) {
     setSelectedTreeId(node.id);
     if (!node.path) return;
 
-    // Bookmark / .url shortcut
-    if (node.kind === "link" || isUrlShortcut(node.path)) {
-      if (node.url) {
-        openOrFocusCenter({
-          id: createId("tab"),
-          title: node.name.replace(/\.url$/i, ""),
-          kind: "browser",
-          url: node.url,
-          path: node.path,
-        });
+    try {
+      if (node.kind === "link" || isUrlShortcut(node.path)) {
+        await openLinkNode(node);
         return;
       }
-      // Read the .url file to extract the target
-      try {
-        const file = await api.readFile(node.path);
-        const url = parseUrlFile(file.content);
-        if (!url) {
-          window.alert("Could not read URL from shortcut file.");
-          return;
-        }
-        openOrFocusCenter({
-          id: createId("tab"),
-          title: node.name.replace(/\.url$/i, ""),
-          kind: "browser",
-          url,
-          path: node.path,
-        });
-      } catch (err) {
-        window.alert(`Failed to open link: ${err instanceof Error ? err.message : err}`);
-      }
-      return;
-    }
 
-    // Text note → open on the summary side so you can edit while reading
-    if (node.kind === "document" && isTextNotePath(node.path)) {
-      try {
-        const file = await api.readFile(node.path);
-        openOrFocusSummaryNote({
+      if (node.kind === "document" && isTextNotePath(node.path)) {
+        await openTextAsNote(node, target);
+        return;
+      }
+
+      if (node.kind === "document") {
+        const tab: Tab = {
           id: createId("note"),
-          title: node.name.replace(/\.(md|txt|markdown)$/i, ""),
+          title: node.name,
           kind: "note",
           path: node.path,
-          content: file.content,
+          content: `# ${node.name}\n\n_Binary or unsupported type for now. PDF/DOCX support is next._\n`,
           dirty: false,
-        });
-      } catch (err) {
-        window.alert(`Failed to open file: ${err instanceof Error ? err.message : err}`);
+        };
+        if (target === "summary") openOrFocusSummary(tab);
+        else openOrFocusCenter(tab);
       }
+    } catch (err) {
+      window.alert(
+        `Failed to open: ${err instanceof Error ? err.message : err}`
+      );
+    }
+  }
+
+  async function handleOpenExplorer() {
+    if (!backendOk) {
+      window.alert("Backend offline – cannot open Explorer.");
       return;
     }
+    try {
+      await api.openFolder("");
+    } catch (err) {
+      window.alert(
+        `Could not open Explorer: ${err instanceof Error ? err.message : err}`
+      );
+    }
+  }
 
-    // Other documents – for now open as read-only demo topic if name matches,
-    // otherwise open as a note with a placeholder message
-    if (node.kind === "document") {
-      openOrFocusSummaryNote({
-        id: createId("note"),
-        title: node.name,
-        kind: "note",
-        path: node.path,
-        content: `# ${node.name}\n\n_Binary or unsupported type for now. PDF/DOCX extraction comes next._\n`,
-        dirty: false,
-      });
+  async function handleRevealNode(node: FileTreeNode) {
+    if (!node.path || !backendOk) return;
+    try {
+      await api.reveal(node.path);
+    } catch (err) {
+      window.alert(
+        `Could not reveal: ${err instanceof Error ? err.message : err}`
+      );
     }
   }
 
@@ -258,14 +287,16 @@ function App() {
 
   function handleNewSummaryNote() {
     const id = createId("note");
-    const tab: Tab = {
-      id,
-      title: "Untitled summary",
-      kind: "note",
-      content: defaultNoteContent(),
-      dirty: false,
-    };
-    setSummaryTabs((prev) => [...prev, tab]);
+    setSummaryTabs((prev) => [
+      ...prev,
+      {
+        id,
+        title: "Untitled summary",
+        kind: "note",
+        content: defaultNoteContent(),
+        dirty: false,
+      },
+    ]);
     setActiveSummaryId(id);
   }
 
@@ -301,6 +332,12 @@ function App() {
     );
   }
 
+  /**
+   * Ctrl+S behaviour:
+   * - If the note already has a path (opened or previously saved) → save in place.
+   * - If first save (no path) → ask for a relative name, save under storage root,
+   *   then optionally open Explorer so you can see it.
+   */
   async function handleSave() {
     const target =
       activeSummary?.kind === "note"
@@ -315,26 +352,52 @@ function App() {
     }
     if (!backendOk) {
       window.alert(
-        "Backend is not running.\nStart it with:\n  cd backend\n  .\\.venv\\Scripts\\Activate.ps1\n  uvicorn app.main:app --reload"
+        "Backend is not running.\nStart uvicorn in the backend folder."
       );
       return;
     }
 
     const tab = target.tab;
-    const safeTitle =
-      (tab.title || "untitled").replace(/[<>:"/\\|?*]/g, "").trim() ||
-      "untitled";
-    const relative = tab.path ?? `summaries/${safeTitle}.md`;
+    let relative = tab.path;
+
+    if (!relative) {
+      // First save – ask for a path under the storage root
+      const safeTitle =
+        (tab.title || "untitled").replace(/[<>:"/\\|?*]/g, "").trim() ||
+        "untitled";
+      const suggested = `summaries/${safeTitle}.md`;
+      const answer = window.prompt(
+        `First save – relative path under:\n${storageRoot ?? "storage root"}\n\n(Leave as-is or change; file will be created there.)`,
+        suggested
+      );
+      if (!answer) return; // cancelled
+      relative = answer.replace(/^[/\\]+/, "").replace(/\\/g, "/");
+      if (!relative.toLowerCase().endsWith(".md") && !relative.toLowerCase().endsWith(".txt")) {
+        relative += ".md";
+      }
+    }
 
     try {
       const res = await api.saveFile(relative, tab.content ?? "");
       if (target.pane === "summary") {
-        updateSummaryTab(tab.id, { path: res.path, dirty: false });
+        updateSummaryTab(tab.id, {
+          path: res.path,
+          dirty: false,
+          title: tab.title || res.path.split("/").pop() || tab.title,
+        });
       } else {
         updateCenterTab(tab.id, { path: res.path, dirty: false });
       }
-      // Show the new file in the explorer
       await refreshTree();
+
+      // First-time save: show the file in Explorer so the user sees where it landed
+      if (!tab.path) {
+        try {
+          await api.reveal(res.path);
+        } catch {
+          /* optional */
+        }
+      }
     } catch (err) {
       window.alert(`Save failed: ${err instanceof Error ? err.message : err}`);
     }
@@ -342,7 +405,7 @@ function App() {
 
   async function handleSaveLinkFromBrowser(url: string, title: string) {
     if (!backendOk) {
-      window.alert("Backend is not running – cannot save bookmark.");
+      window.alert("Backend offline – cannot save bookmark.");
       return;
     }
     try {
@@ -371,7 +434,9 @@ function App() {
             Storage: {storageRoot}
           </span>
         )}
-        <span className="ml-auto">Ctrl+S = save · ↻ refreshes tree</span>
+        <span className="ml-auto">
+          Click = open centre · Right-click = choose pane · 📂 = Explorer
+        </span>
       </div>
 
       <div className="flex flex-1 min-h-0">
@@ -386,6 +451,8 @@ function App() {
           loading={treeLoading}
           backendOk={backendOk}
           onRefresh={() => void refreshTree()}
+          onOpenExplorer={() => void handleOpenExplorer()}
+          onRevealNode={(n) => void handleRevealNode(n)}
         />
 
         <main className="flex-1 flex flex-col min-w-0 bg-[var(--bg)]">
@@ -437,7 +504,7 @@ function App() {
             )}
             {!activeCenter && (
               <div className="h-full flex items-center justify-center text-[var(--muted)] text-sm">
-                Open a file from the explorer or create a new browser tab.
+                Open a file from the explorer (click = centre) or new browser tab.
               </div>
             )}
           </div>
@@ -445,6 +512,7 @@ function App() {
 
         <SummaryPanel
           width={right.width}
+          flexGrow={summaryFlexGrow}
           onResizeStart={right.onMouseDown}
           collapsed={summaryCollapsed}
           onToggleCollapse={() => setSummaryCollapsed((v) => !v)}
@@ -454,6 +522,8 @@ function App() {
           onCloseTab={closeSummaryTab}
           onNewNoteTab={handleNewSummaryNote}
           onUpdateTab={updateSummaryTab}
+          onOpenStorageExplorer={() => void handleOpenExplorer()}
+          backendOk={backendOk}
         />
       </div>
     </div>
