@@ -6,7 +6,7 @@ Dev:
 
 Packaged (from repo root):
     Start-Research-Workspace.bat
-    or: backend\.venv\Scripts\python.exe run_app.py
+    or: backend\\.venv\\Scripts\\python.exe run_app.py
 """
 
 from __future__ import annotations

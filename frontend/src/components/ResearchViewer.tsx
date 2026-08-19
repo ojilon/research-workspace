@@ -1,5 +1,5 @@
-import { useState } from "react";
-import PdfBlobViewer from "./PdfBlobViewer";
+import { useState, type JSXElementConstructor, type Key, type ReactElement, type ReactNode, type ReactPortal } from "react";
+import PdfCanvasViewer from "./PdfCanvasViewer";
 import DocxHtmlViewer from "./DocxHtmlViewer";
 import type { DocBlock, ExtractedDocument } from "../types";
 
@@ -78,7 +78,7 @@ function ResearchViewer({
             {extracted.blocks.length === 0 && (
               <p className="text-sm text-[var(--muted)]">No text blocks extracted.</p>
             )}
-            {extracted.blocks.map((block) => {
+            {extracted.blocks.map((block: { id: Key | null | undefined; meta: { page: number | undefined; }; type: string; text: string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | Promise<string | number | bigint | boolean | ReactPortal | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | null | undefined> | null | undefined; }) => {
               const isSel = selectedId === block.id;
               const page = block.meta?.page as number | undefined;
               return (
@@ -150,7 +150,7 @@ function ResearchViewer({
 
         {(mode === "pages" || mode === "split") && path && extracted.kind === "pdf" && (
           <div className={mode === "split" ? "w-1/2 min-h-0" : "w-full min-h-0"}>
-            <PdfBlobViewer path={path} title={extracted.title} />
+            <PdfCanvasViewer src={path} />
           </div>
         )}
 
