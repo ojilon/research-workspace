@@ -23,3 +23,5 @@ workspace/*
 # OS
 .DS_Store
 Thumbs.db
+
+Start-Research-Workspace.bat
