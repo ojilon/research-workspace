@@ -12,15 +12,17 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.documents import extract_document, file_kind
 from app.shell import open_in_explorer
 from app.storage import ensure_storage_root, resolve_default_storage_root
 
 app = FastAPI(
     title="Research Workspace API",
-    version="0.1.0",
+    version="0.2.0",
     description="Local-first backend for documents, bookmarks, and storage root.",
 )
 
@@ -66,19 +68,20 @@ def build_tree(directory: Path, root: Path) -> list[dict[str, Any]]:
                     "id": f"folder:{rel}",
                     "name": entry.name,
                     "kind": "folder",
+                    "fileKind": "folder",
                     "path": rel,
                     "children": build_tree(entry, root),
                 }
             )
         else:
-            kind = "document"
-            if entry.suffix.lower() in {".url", ".webloc"}:
-                kind = "link"
+            fk = file_kind(entry)
+            kind = "link" if fk == "link" else "document"
             nodes.append(
                 {
                     "id": f"{kind}:{rel}",
                     "name": entry.name,
                     "kind": kind,
+                    "fileKind": fk,
                     "path": rel,
                 }
             )
@@ -101,14 +104,10 @@ class BookmarkBody(BaseModel):
 
 
 class OpenFolderBody(BaseModel):
-    """Open Explorer at storage root, or at a relative subfolder."""
-    relative_path: str = Field(
-        "", description="Subfolder under storage root (empty = root itself)"
-    )
+    relative_path: str = Field("", description="Subfolder under storage root")
 
 
 class RevealBody(BaseModel):
-    """Reveal a file or folder in Explorer (selected if it is a file)."""
     relative_path: str
 
 
@@ -197,17 +196,58 @@ def read_file(relative_path: str) -> dict[str, str]:
         text = target.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
         raise HTTPException(
-            status_code=415, detail="Binary file – use extract endpoint later"
+            status_code=415,
+            detail="Binary file – use /api/documents/extract or /api/files/raw",
         ) from exc
     return {"path": relative_path, "content": text}
 
 
+@app.get("/api/documents/extract")
+def documents_extract(relative_path: str) -> dict[str, Any]:
+    """
+    Extract a selectable block tree from PDF / DOCX / text / code.
+    Blocks are the unit for click-select, future drag-drop, and search.
+    """
+    root = current_root()
+    target = safe_join(root, relative_path)
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        payload = extract_document(target)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Extraction failed: {exc}"
+        ) from exc
+    payload["relative_path"] = relative_path
+    return payload
+
+
+@app.get("/api/files/raw")
+def files_raw(relative_path: str) -> FileResponse:
+    """Stream the original file (used for in-app PDF viewing)."""
+    root = current_root()
+    target = safe_join(root, relative_path)
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    media = {
+        ".pdf": "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+    }.get(target.suffix.lower(), "application/octet-stream")
+    return FileResponse(
+        path=str(target),
+        media_type=media,
+        filename=target.name,
+    )
+
+
 @app.post("/api/shell/open-folder")
 def shell_open_folder(body: OpenFolderBody = OpenFolderBody()) -> dict[str, str]:
-    """
-    Open Windows Explorer at the storage root (or a subfolder).
-    Use this for "Create folder/file" and "Open storage" from the UI.
-    """
     root = current_root()
     if body.relative_path.strip():
         target = safe_join(root, body.relative_path.strip())
@@ -223,7 +263,6 @@ def shell_open_folder(body: OpenFolderBody = OpenFolderBody()) -> dict[str, str]
 
 @app.post("/api/shell/reveal")
 def shell_reveal(body: RevealBody) -> dict[str, str]:
-    """Reveal a relative path in Explorer (file selected when possible)."""
     root = current_root()
     target = safe_join(root, body.relative_path)
     try:
