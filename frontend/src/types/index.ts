@@ -1,22 +1,18 @@
 /**
  * Shared types for Research Workspace.
- * Keep these small and explicit so the UI stays predictable.
  */
 
-/** One content block inside a section (paragraph for now). */
 export type ContentBlock = {
   type: "paragraph";
   text: string;
 };
 
-/** A section inside a topic (e.g. "Introduction", "Osmosis"). */
 export type Section = {
   id: string;
   title: string;
   content: ContentBlock[];
 };
 
-/** A research topic (shown in the left sidebar list for now). */
 export type Topic = {
   id: string;
   name: string;
@@ -25,41 +21,60 @@ export type Topic = {
 };
 
 /**
- * Tab kinds:
- * - document  → demo topic or loaded file (read-oriented for now)
- * - browser   → URL bar + open external
- * - note      → editable text (default new tab on the summary side)
+ * Block inside an extracted research document (PDF / DOCX / text / code).
+ * Click selects the whole block — no need to drag-select text.
  */
-export type TabKind = "document" | "browser" | "note";
+export type DocBlockType =
+  | "paragraph"
+  | "heading"
+  | "list_item"
+  | "table_cell"
+  | "code_line";
 
-/** One open tab in the centre or right pane. */
+export type DocBlock = {
+  id: string;
+  type: DocBlockType;
+  text: string;
+  meta?: Record<string, unknown>;
+};
+
+export type ExtractedDocument = {
+  relative_path?: string;
+  path?: string;
+  kind: string;
+  title: string;
+  blocks: DocBlock[];
+  warning?: string | null;
+  page_count?: number;
+  raw?: string;
+  language?: string;
+};
+
+export type TabKind = "document" | "browser" | "note" | "research";
+
 export type Tab = {
   id: string;
   title: string;
   kind: TabKind;
-  /** For document tabs: topic id. */
   resourceId?: string;
-  /** Relative path under storage root (saved notes / files). */
   path?: string;
-  /** For browser tabs: current URL. */
   url?: string;
-  /** Editable body for note tabs (Markdown / plain text). */
   content?: string;
-  /** Dirty flag – true when content changed since last save. */
   dirty?: boolean;
+  /** Loaded PDF/DOCX/code payload for research tabs. */
+  extracted?: ExtractedDocument;
+  fileKind?: string;
 };
 
-/** Node in the local file tree (folder, document, or bookmark/link). */
 export type FileTreeNode = {
   id: string;
   name: string;
   kind: "folder" | "document" | "link";
-  /** Relative path under the storage root. */
+  /** pdf | docx | code | text | link | folder | ... from backend */
+  fileKind?: string;
   path?: string;
-  /** For links: the URL to open. */
   url?: string;
   children?: FileTreeNode[];
 };
 
-/** Theme preference. */
 export type ThemeMode = "light" | "dark";
