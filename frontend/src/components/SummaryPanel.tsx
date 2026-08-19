@@ -4,7 +4,10 @@ import MainPanel from "./MainPanel";
 import type { Tab } from "../types";
 
 type SummaryPanelProps = {
+  /** Fixed width when not using flexGrow; ignored if flexGrow is true. */
   width: number;
+  /** When true, pane grows with the remaining space (e.g. sidebar collapsed → ~50%). */
+  flexGrow?: boolean;
   onResizeStart: (e: React.MouseEvent) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
@@ -14,16 +17,13 @@ type SummaryPanelProps = {
   onCloseTab: (id: string) => void;
   onNewNoteTab: () => void;
   onUpdateTab: (id: string, patch: Partial<Tab>) => void;
+  onOpenStorageExplorer: () => void;
+  backendOk: boolean;
 };
 
-/**
- * Right pane: independent tab strip.
- * New tabs default to an editable note (like a blank docx/md draft).
- * Document tabs can also open here so you can put a paper on the left
- * and a second document / summary on the right.
- */
 function SummaryPanel({
   width,
+  flexGrow,
   onResizeStart,
   collapsed,
   onToggleCollapse,
@@ -33,6 +33,8 @@ function SummaryPanel({
   onCloseTab,
   onNewNoteTab,
   onUpdateTab,
+  onOpenStorageExplorer,
+  backendOk,
 }: SummaryPanelProps) {
   if (collapsed) {
     return (
@@ -53,28 +55,49 @@ function SummaryPanel({
 
   return (
     <aside
-      className="relative shrink-0 flex flex-col border-l border-[var(--border)] bg-[var(--panel)]"
-      style={{ width }}
+      className={
+        "relative flex flex-col border-l border-[var(--border)] bg-[var(--panel)] min-w-0 " +
+        (flexGrow ? "flex-1" : "shrink-0")
+      }
+      style={flexGrow ? undefined : { width }}
     >
-      {/* Drag handle */}
       <div
         onMouseDown={onResizeStart}
-        className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-[var(--accent)] transition-colors z-10"
+        className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-[var(--accent)] transition-colors z-10"
         title="Drag to resize"
       />
 
-      <div className="flex items-center justify-between px-2 h-9 border-b border-[var(--border)] shrink-0">
+      <div className="flex items-center justify-between px-2 h-9 border-b border-[var(--border)] shrink-0 gap-1">
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)] px-1">
           Summary
         </span>
-        <button
-          type="button"
-          title="Collapse"
-          onClick={onToggleCollapse}
-          className="w-6 h-6 rounded text-[var(--muted)] hover:bg-[var(--hover)] text-sm"
-        >
-          »
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            title="Open storage in Explorer (pick/open existing file)"
+            onClick={onOpenStorageExplorer}
+            disabled={!backendOk}
+            className="px-2 h-6 rounded text-xs text-[var(--muted)] hover:bg-[var(--hover)] disabled:opacity-40"
+          >
+            Open file
+          </button>
+          <button
+            type="button"
+            title="Open storage in Explorer (create a new file there, then ↻)"
+            onClick={onOpenStorageExplorer}
+            disabled={!backendOk}
+            className="px-2 h-6 rounded text-xs text-[var(--muted)] hover:bg-[var(--hover)] disabled:opacity-40"
+          >
+            Create file
+          </button>
+          <button
+            type="button"/[object Object]            title="Collapse"
+            onClick={onToggleCollapse}
+            className="w-6 h-6 rounded text-[var(--muted)] hover:bg-[var(--hover)] text-sm"
+          >
+            »
+          </button>
+        </div>
       </div>
 
       <TabBar
@@ -103,10 +126,12 @@ function SummaryPanel({
           <MainPanel selectedTopicId={active.resourceId} />
         )}
         {!active && (
-          <div className="h-full flex items-center justify-center text-[var(--muted)] text-sm p-4 text-center">
-            Press + to create a new summary note.
-            <br />
-            Ctrl+S saves into your local storage folder.
+          <div className="h-full flex flex-col items-center justify-center gap-3 text-[var(--muted)] text-sm p-4 text-center">
+            <p>
+              Press <strong>+</strong> for a new note, or use Open / Create file
+              to work in Windows Explorer on your storage drive.
+            </p>
+            <p className="text-xs">Ctrl+S saves the active note in place.</p>
           </div>
         )}
       </div>
