@@ -15,6 +15,14 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${tabCounter++}`;
 }
 
+function hostnameFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname || "Browser";
+  } catch {
+    return "Browser";
+  }
+}
+
 /**
  * Root application shell.
  * - Left: resizable file tree (collapsible)
@@ -25,8 +33,18 @@ function createId(prefix: string) {
 function App() {
   const { theme, toggleTheme } = useTheme();
 
-  const left = useResizable({ initialWidth: 260, minWidth: 180, maxWidth: 420, side: "left" });
-  const right = useResizable({ initialWidth: 300, minWidth: 200, maxWidth: 520, side: "right" });
+  const left = useResizable({
+    initialWidth: 260,
+    minWidth: 180,
+    maxWidth: 420,
+    side: "left",
+  });
+  const right = useResizable({
+    initialWidth: 300,
+    minWidth: 200,
+    maxWidth: 520,
+    side: "right",
+  });
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
@@ -142,7 +160,7 @@ function App() {
                   setTabs((prev) =>
                     prev.map((t) =>
                       t.id === activeTab.id
-                        ? { ...t, url, title: new URL(url).hostname || "Browser" }
+                        ? { ...t, url, title: hostnameFromUrl(url) }
                         : t
                     )
                   );
