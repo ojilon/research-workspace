@@ -12,17 +12,18 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.documents import extract_document, file_kind
-from app.shell import open_in_explorer
+from app.render import docx_to_html
+from app.shell import open_in_explorer, save_as_dialog
 from app.storage import ensure_storage_root, resolve_default_storage_root
 
 app = FastAPI(
     title="Research Workspace API",
-    version="0.2.0",
+    version="0.3.0",
     description="Local-first backend for documents, bookmarks, and storage root.",
 )
 
@@ -32,6 +33,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition", "Content-Type", "Content-Length"],
 )
 
 
@@ -89,7 +91,7 @@ def build_tree(directory: Path, root: Path) -> list[dict[str, Any]]:
 
 
 class StorageRootBody(BaseModel):
-    path: str = Field(..., description="Absolute path to the local storage folder")
+    path: str
 
 
 class SaveFileBody(BaseModel):
@@ -109,6 +111,11 @@ class OpenFolderBody(BaseModel):
 
 class RevealBody(BaseModel):
     relative_path: str
+
+
+class SaveAsBody(BaseModel):
+    default_name: str = "Untitled.md"
+    relative_dir: str = ""
 
 
 @app.get("/api/health")
@@ -204,10 +211,6 @@ def read_file(relative_path: str) -> dict[str, str]:
 
 @app.get("/api/documents/extract")
 def documents_extract(relative_path: str) -> dict[str, Any]:
-    """
-    Extract a selectable block tree from PDF / DOCX / text / code.
-    Blocks are the unit for click-select, future drag-drop, and search.
-    """
     root = current_root()
     target = safe_join(root, relative_path)
     if not target.is_file():
@@ -222,9 +225,28 @@ def documents_extract(relative_path: str) -> dict[str, Any]:
     return payload
 
 
+@app.get("/api/documents/html")
+def documents_html(relative_path: str) -> HTMLResponse:
+    """Readable HTML for DOCX (headings, bold/italic, tables)."""
+    root = current_root()
+    target = safe_join(root, relative_path)
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    if target.suffix.lower() != ".docx":
+        raise HTTPException(status_code=400, detail="HTML view is for .docx only")
+    try:
+        body = docx_to_html(target)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Render failed: {exc}") from exc
+    return HTMLResponse(content=body)
+
+
 @app.get("/api/files/raw")
-def files_raw(relative_path: str) -> FileResponse:
-    """Stream the original file (used for in-app PDF viewing)."""
+def files_raw(relative_path: str) -> Response:
+    """
+    Stream the original file with headers that allow the browser to
+    display PDFs (fetch → blob URL on the frontend avoids iframe CORS).
+    """
     root = current_root()
     target = safe_join(root, relative_path)
     if not target.is_file():
@@ -239,10 +261,15 @@ def files_raw(relative_path: str) -> FileResponse:
         ".gif": "image/gif",
         ".webp": "image/webp",
     }.get(target.suffix.lower(), "application/octet-stream")
-    return FileResponse(
-        path=str(target),
+    data = target.read_bytes()
+    return Response(
+        content=data,
         media_type=media,
-        filename=target.name,
+        headers={
+            "Content-Disposition": f'inline; filename="{target.name}"',
+            "Cache-Control": "no-cache",
+            "Content-Length": str(len(data)),
+        },
     )
 
 
@@ -270,3 +297,40 @@ def shell_reveal(body: RevealBody) -> dict[str, str]:
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"Could not open Explorer: {exc}") from exc
     return {"opened": str(target)}
+
+
+@app.post("/api/shell/save-as")
+def shell_save_as(body: SaveAsBody = SaveAsBody()) -> dict[str, Any]:
+    """
+    Native Windows Save As dialog (name + extension).
+    Creates the file if needed and returns its path relative to storage root
+    when the choice is under the storage root; otherwise returns absolute path.
+    """
+    root = current_root()
+    start = root
+    if body.relative_dir.strip():
+        start = safe_join(root, body.relative_dir.strip())
+        start.mkdir(parents=True, exist_ok=True)
+
+    chosen = save_as_dialog(
+        initial_dir=start,
+        default_name=body.default_name or "Untitled.md",
+        title="Create document",
+    )
+    if chosen is None:
+        return {"cancelled": True}
+
+    try:
+        rel = str(chosen.relative_to(root)).replace("\\", "/")
+        under_root = True
+    except ValueError:
+        rel = str(chosen)
+        under_root = False
+
+    return {
+        "cancelled": False,
+        "path": rel,
+        "absolute": str(chosen),
+        "under_root": under_root,
+        "name": chosen.name,
+    }
