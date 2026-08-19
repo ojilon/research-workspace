@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import SummaryPanel from "./components/SummaryPanel";
 import TabBar from "./components/TabBar";
 import MainPanel from "./components/MainPanel";
 import BrowserTab from "./components/BrowserTab";
-import NoteEditor from "./components/NoteEditor";
+import NoteEditor, { type NoteEditorHandle } from "./components/NoteEditor";
 import ResearchViewer from "./components/ResearchViewer";
 import CodeViewer from "./components/CodeViewer";
 import type { OpenTarget } from "./components/FileTree";
@@ -62,6 +62,7 @@ function isResearchPath(path: string, fileKind?: string): boolean {
 
 function App() {
   const { theme, toggleTheme } = useTheme();
+  const summaryNoteRef = useRef<NoteEditorHandle | null>(null);
 
   const left = useResizable({
     initialWidth: 260,
@@ -261,7 +262,6 @@ function App() {
       }
 
       if (node.kind === "document") {
-        // Try extract anyway (images etc. may warn)
         try {
           await openResearchDoc(node, target);
         } catch {
@@ -284,27 +284,30 @@ function App() {
     }
   }
 
-  /** Append a selected research block into the active summary note. */
+  /** Insert block text at the summary caret (between existing text). */
   function sendBlockToSummary(block: DocBlock) {
     if (!block.text.trim()) return;
-    let note = activeSummary?.kind === "note" ? activeSummary : null;
-    if (!note) {
-      const id = createId("note");
-      note = {
+    const addition = `\n\n${block.text.trim()}\n`;
+
+    if (activeSummary?.kind === "note" && summaryNoteRef.current) {
+      summaryNoteRef.current.insertAtCursor(addition);
+      updateSummaryTab(activeSummary.id, { dirty: true });
+      return;
+    }
+
+    // No active note editor – create one and append
+    const id = createId("note");
+    setSummaryTabs((prev) => [
+      ...prev,
+      {
         id,
         title: "Untitled summary",
         kind: "note",
-        content: defaultNoteContent(),
+        content: defaultNoteContent() + addition,
         dirty: true,
-      };
-      setSummaryTabs((prev) => [...prev, note!]);
-      setActiveSummaryId(id);
-    }
-    const addition = `\n\n${block.text.trim()}\n`;
-    updateSummaryTab(note.id, {
-      content: (note.content ?? "") + addition,
-      dirty: true,
-    });
+      },
+    ]);
+    setActiveSummaryId(id);
   }
 
   async function handleOpenExplorer() {
@@ -317,6 +320,37 @@ function App() {
     } catch (err) {
       window.alert(
         `Could not open Explorer: ${err instanceof Error ? err.message : err}`
+      );
+    }
+  }
+
+  /** Windows Save As – pick name + extension under storage root. */
+  async function handleCreateFile() {
+    if (!backendOk) {
+      window.alert("Backend offline.");
+      return;
+    }
+    try {
+      const res = await api.saveAs("Untitled.md", "summaries");
+      if (res.cancelled) return;
+      await refreshTree();
+      if (res.under_root && res.path) {
+        // Open the new markdown/text file as a note on the summary side
+        if (isTextNotePath(res.path)) {
+          const file = await api.readFile(res.path);
+          openOrFocusSummary({
+            id: createId("note"),
+            title: res.name?.replace(/\.(md|txt|markdown)$/i, "") ?? "New",
+            kind: "note",
+            path: res.path,
+            content: file.content,
+            dirty: false,
+          });
+        }
+      }
+    } catch (err) {
+      window.alert(
+        `Create file failed: ${err instanceof Error ? err.message : err}`
       );
     }
   }
@@ -409,21 +443,25 @@ function App() {
     let relative = tab.path;
 
     if (!relative) {
-      const safeTitle =
-        (tab.title || "untitled").replace(/[<>:"/\\|?*]/g, "").trim() ||
-        "untitled";
-      const suggested = `summaries/${safeTitle}.md`;
-      const answer = window.prompt(
-        `First save – relative path under:\n${storageRoot ?? "storage root"}`,
-        suggested
-      );
-      if (!answer) return;
-      relative = answer.replace(/^[/\\]+/, "").replace(/\\/g, "/");
-      if (
-        !relative.toLowerCase().endsWith(".md") &&
-        !relative.toLowerCase().endsWith(".txt")
-      ) {
-        relative += ".md";
+      // First save → native Save As
+      try {
+        const res = await api.saveAs(
+          `${(tab.title || "untitled").replace(/[<>:"/\\|?*]/g, "") || "untitled"}.md`,
+          "summaries"
+        );
+        if (res.cancelled || !res.path) return;
+        if (!res.under_root) {
+          window.alert(
+            "Please save under the storage root so the app can track the file."
+          );
+          return;
+        }
+        relative = res.path;
+      } catch (err) {
+        window.alert(
+          `Save As failed: ${err instanceof Error ? err.message : err}`
+        );
+        return;
       }
     }
 
@@ -435,13 +473,6 @@ function App() {
         updateCenterTab(tab.id, { path: res.path, dirty: false });
       }
       await refreshTree();
-      if (!tab.path) {
-        try {
-          await api.reveal(res.path);
-        } catch {
-          /* optional */
-        }
-      }
     } catch (err) {
       window.alert(`Save failed: ${err instanceof Error ? err.message : err}`);
     }
@@ -499,7 +530,7 @@ function App() {
           </span>
         )}
         <span className="ml-auto">
-          PDF/DOCX: click block or → to send to summary
+          PDF view: select text · copy/paste into summary · → inserts at caret
         </span>
       </div>
 
@@ -588,7 +619,10 @@ function App() {
           onNewNoteTab={handleNewSummaryNote}
           onUpdateTab={updateSummaryTab}
           onOpenStorageExplorer={() => void handleOpenExplorer()}
+          onCreateFile={() => void handleCreateFile()}
           backendOk={backendOk}
+          onSendBlockToNote={sendBlockToSummary}
+          noteEditorRef={summaryNoteRef}
         />
       </div>
     </div>
