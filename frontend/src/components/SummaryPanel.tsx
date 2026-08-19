@@ -1,5 +1,6 @@
+import type { RefObject } from "react";
 import TabBar from "./TabBar";
-import NoteEditor from "./NoteEditor";
+import NoteEditor, { type NoteEditorHandle } from "./NoteEditor";
 import MainPanel from "./MainPanel";
 import ResearchViewer from "./ResearchViewer";
 import CodeViewer from "./CodeViewer";
@@ -18,8 +19,11 @@ type SummaryPanelProps = {
   onNewNoteTab: () => void;
   onUpdateTab: (id: string, patch: Partial<Tab>) => void;
   onOpenStorageExplorer: () => void;
+  /** Native Save As dialog (name + extension). */
+  onCreateFile: () => void;
   backendOk: boolean;
   onSendBlockToNote?: (block: DocBlock) => void;
+  noteEditorRef?: RefObject<NoteEditorHandle | null>;
 };
 
 function SummaryPanel({
@@ -35,8 +39,10 @@ function SummaryPanel({
   onNewNoteTab,
   onUpdateTab,
   onOpenStorageExplorer,
+  onCreateFile,
   backendOk,
   onSendBlockToNote,
+  noteEditorRef,
 }: SummaryPanelProps) {
   if (collapsed) {
     return (
@@ -76,7 +82,7 @@ function SummaryPanel({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            title="Open storage in Explorer"
+            title="Open storage folder in Explorer"
             onClick={onOpenStorageExplorer}
             disabled={!backendOk}
             className="px-2 h-6 rounded text-xs text-[var(--muted)] hover:bg-[var(--hover)] disabled:opacity-40"
@@ -85,8 +91,8 @@ function SummaryPanel({
           </button>
           <button
             type="button"
-            title="Open storage in Explorer to create a file"
-            onClick={onOpenStorageExplorer}
+            title="Create file – Windows Save As (choose name and extension)"
+            onClick={onCreateFile}
             disabled={!backendOk}
             className="px-2 h-6 rounded text-xs text-[var(--muted)] hover:bg-[var(--hover)] disabled:opacity-40"
           >
@@ -114,6 +120,7 @@ function SummaryPanel({
       <div className="flex-1 min-h-0 overflow-hidden">
         {active?.kind === "note" && (
           <NoteEditor
+            ref={noteEditorRef}
             title={active.title}
             content={active.content ?? ""}
             status={active.dirty ? "unsaved" : active.path ?? "draft"}
@@ -128,25 +135,29 @@ function SummaryPanel({
         {active?.kind === "document" && active.resourceId && (
           <MainPanel selectedTopicId={active.resourceId} />
         )}
-        {active?.kind === "research" && active.extracted?.kind === "code" && active.extracted.raw != null && (
-          <CodeViewer
-            title={active.extracted.title}
-            language={active.extracted.language}
-            raw={active.extracted.raw}
-          />
-        )}
-        {active?.kind === "research" && active.extracted && active.extracted.kind !== "code" && (
-          <ResearchViewer
-            extracted={active.extracted}
-            path={active.path}
-            onSendToSummary={onSendBlockToNote}
-          />
-        )}
+        {active?.kind === "research" &&
+          active.extracted?.kind === "code" &&
+          active.extracted.raw != null && (
+            <CodeViewer
+              title={active.extracted.title}
+              language={active.extracted.language}
+              raw={active.extracted.raw}
+            />
+          )}
+        {active?.kind === "research" &&
+          active.extracted &&
+          active.extracted.kind !== "code" && (
+            <ResearchViewer
+              extracted={active.extracted}
+              path={active.path}
+              onSendToSummary={onSendBlockToNote}
+            />
+          )}
         {!active && (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-[var(--muted)] text-sm p-4 text-center">
             <p>
-              Press <strong>+</strong> for a new note, or open a file from the
-              tree (right-click → Open in summary).
+              Press <strong>+</strong> for a new note, or Create file for a Save
+              As dialog.
             </p>
             <p className="text-xs">Ctrl+S saves the active note in place.</p>
           </div>
