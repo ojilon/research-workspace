@@ -1,12 +1,12 @@
 import TabBar from "./TabBar";
 import NoteEditor from "./NoteEditor";
 import MainPanel from "./MainPanel";
-import type { Tab } from "../types";
+import ResearchViewer from "./ResearchViewer";
+import CodeViewer from "./CodeViewer";
+import type { DocBlock, Tab } from "../types";
 
 type SummaryPanelProps = {
-  /** Fixed width when not using flexGrow; ignored if flexGrow is true. */
   width: number;
-  /** When true, pane grows with remaining space (sidebar collapsed → ~50%). */
   flexGrow?: boolean;
   onResizeStart: (e: React.MouseEvent) => void;
   collapsed: boolean;
@@ -19,6 +19,7 @@ type SummaryPanelProps = {
   onUpdateTab: (id: string, patch: Partial<Tab>) => void;
   onOpenStorageExplorer: () => void;
   backendOk: boolean;
+  onSendBlockToNote?: (block: DocBlock) => void;
 };
 
 function SummaryPanel({
@@ -35,6 +36,7 @@ function SummaryPanel({
   onUpdateTab,
   onOpenStorageExplorer,
   backendOk,
+  onSendBlockToNote,
 }: SummaryPanelProps) {
   if (collapsed) {
     return (
@@ -74,7 +76,7 @@ function SummaryPanel({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            title="Open storage in Explorer (pick/open existing file)"
+            title="Open storage in Explorer"
             onClick={onOpenStorageExplorer}
             disabled={!backendOk}
             className="px-2 h-6 rounded text-xs text-[var(--muted)] hover:bg-[var(--hover)] disabled:opacity-40"
@@ -83,7 +85,7 @@ function SummaryPanel({
           </button>
           <button
             type="button"
-            title="Open storage in Explorer (create a new file there, then refresh)"
+            title="Open storage in Explorer to create a file"
             onClick={onOpenStorageExplorer}
             disabled={!backendOk}
             className="px-2 h-6 rounded text-xs text-[var(--muted)] hover:bg-[var(--hover)] disabled:opacity-40"
@@ -126,11 +128,25 @@ function SummaryPanel({
         {active?.kind === "document" && active.resourceId && (
           <MainPanel selectedTopicId={active.resourceId} />
         )}
+        {active?.kind === "research" && active.extracted?.kind === "code" && active.extracted.raw != null && (
+          <CodeViewer
+            title={active.extracted.title}
+            language={active.extracted.language}
+            raw={active.extracted.raw}
+          />
+        )}
+        {active?.kind === "research" && active.extracted && active.extracted.kind !== "code" && (
+          <ResearchViewer
+            extracted={active.extracted}
+            path={active.path}
+            onSendToSummary={onSendBlockToNote}
+          />
+        )}
         {!active && (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-[var(--muted)] text-sm p-4 text-center">
             <p>
-              Press <strong>+</strong> for a new note, or use Open / Create file
-              to work in Windows Explorer on your storage drive.
+              Press <strong>+</strong> for a new note, or open a file from the
+              tree (right-click → Open in summary).
             </p>
             <p className="text-xs">Ctrl+S saves the active note in place.</p>
           </div>
