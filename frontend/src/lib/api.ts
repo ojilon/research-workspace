@@ -1,6 +1,5 @@
 /**
  * Thin fetch wrapper for the Research Workspace FastAPI backend.
- * Base URL defaults to the local uvicorn process.
  */
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
@@ -24,7 +23,7 @@ export const api = {
   health: () => request<{ status: string }>("/api/health"),
 
   getStorageRoot: () =>
-    request<{ path: string }>("/api/settings/storage-root"),
+    request<{ path: string; drive?: string }>("/api/settings/storage-root"),
 
   setStorageRoot: (path: string) =>
     request<{ path: string }>("/api/settings/storage-root", {
@@ -52,5 +51,19 @@ export const api = {
     request<{ path: string }>("/api/bookmarks", {
       method: "POST",
       body: JSON.stringify({ folder, title, url }),
+    }),
+
+  /** Open Windows Explorer at storage root or a subfolder. */
+  openFolder: (relative_path = "") =>
+    request<{ opened: string }>("/api/shell/open-folder", {
+      method: "POST",
+      body: JSON.stringify({ relative_path }),
+    }),
+
+  /** Reveal a file/folder in Explorer. */
+  reveal: (relative_path: string) =>
+    request<{ opened: string }>("/api/shell/reveal", {
+      method: "POST",
+      body: JSON.stringify({ relative_path }),
     }),
 };
