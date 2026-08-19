@@ -22,30 +22,29 @@ Organize references
 Export document
 ```
 
-## Phase 1 — Foundation (mostly done on `restructure`)
+## Phase 1 — Foundation (done on `restructure`)
 
-- [x] Frontend setup (Vite + React + TS + Tailwind)
-- [x] Shared TypeScript types
-- [x] Modern light / dark theme
-- [x] Resizable left file tree
-- [x] Centre tab bar (document + browser tabs)
-- [x] Right summary pane with **its own tabs** (new tab = editable note)
-- [x] Both panes can show documents / notes
-- [x] Ctrl+S saves active note via FastAPI into storage root
-- [x] FastAPI skeleton + `.venv` instructions (`docs/002-backend-setup.md`)
-- [x] Local storage root (default `~/ResearchWorkspace`)
-- [x] Save link / bookmark into folder
-- [ ] Live file tree from backend (currently still sample data)
-- [ ] Pick storage root from the UI
+- [x] Frontend (Vite + React + TS + Tailwind)
+- [x] Light / dark theme
+- [x] Resizable file tree + dual panes with tabs
+- [x] Summary pane: new tab = editable note
+- [x] Ctrl+S → save note into storage root
+- [x] FastAPI + `.venv` setup
+- [x] Storage root prefers **D:\ResearchWorkspace**, falls back to C:/home
+- [x] Save link as `.url` bookmark
+- [x] **Live file tree** from `GET /api/tree`
+- [x] Open `.md` / `.txt` from tree into summary note tabs
+- [x] Open `.url` bookmarks into browser tabs
+- [ ] UI control to change storage root path
+- [ ] Create folder from the sidebar
 
 ## Phase 2 — Research Workspace (next)
 
-- Load real tree from `GET /api/tree`
-- Open local Markdown files into note tabs
-- PDF open + text extraction (Python `pypdf`)
+- PDF open + text extraction (`pypdf`)
 - DOCX open (`python-docx`)
-- Frontend PDF viewer (later)
-- Drag text from centre → summary (copy/paste assist)
+- Simple frontend PDF viewer (later)
+- Create folder / rename from UI
+- Drag text from centre → summary (copy assist)
 
 ## Phase 3 — Documents
 
@@ -57,17 +56,16 @@ Export document
 ## Phase 4 — Intelligent Assistance (later)
 
 - Local text processing
-- AI-assisted placement into a summary tree
-- Diff review (accept / reject)
+- AI-assisted summary tree
+- Diff review
 
 ## Phase 5 — Knowledge Organization
 
 - Topics & source groups
-- Search across notes
+- Search
 - Cross-source summaries
 - Version history
 
 ## Rule
 
-Each phase must produce **usable software** before the next phase begins.
-No AI features until the reading + note-taking loop is comfortable.
+Each phase must produce usable software before the next begins.
