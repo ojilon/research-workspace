@@ -6,7 +6,7 @@ import type { Tab } from "../types";
 type SummaryPanelProps = {
   /** Fixed width when not using flexGrow; ignored if flexGrow is true. */
   width: number;
-  /** When true, pane grows with the remaining space (e.g. sidebar collapsed → ~50%). */
+  /** When true, pane grows with remaining space (sidebar collapsed → ~50%). */
   flexGrow?: boolean;
   onResizeStart: (e: React.MouseEvent) => void;
   collapsed: boolean;
@@ -83,7 +83,7 @@ function SummaryPanel({
           </button>
           <button
             type="button"
-            title="Open storage in Explorer (create a new file there, then ↻)"
+            title="Open storage in Explorer (create a new file there, then refresh)"
             onClick={onOpenStorageExplorer}
             disabled={!backendOk}
             className="px-2 h-6 rounded text-xs text-[var(--muted)] hover:bg-[var(--hover)] disabled:opacity-40"
@@ -91,7 +91,8 @@ function SummaryPanel({
             Create file
           </button>
           <button
-            type="button"/[object Object]            title="Collapse"
+            type="button"
+            title="Collapse"
             onClick={onToggleCollapse}
             className="w-6 h-6 rounded text-[var(--muted)] hover:bg-[var(--hover)] text-sm"
           >
