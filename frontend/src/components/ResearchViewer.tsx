@@ -1,20 +1,17 @@
 import { useState } from "react";
-import { api } from "../lib/api";
+import PdfBlobViewer from "./PdfBlobViewer";
+import DocxHtmlViewer from "./DocxHtmlViewer";
 import type { DocBlock, ExtractedDocument } from "../types";
 
 type ResearchViewerProps = {
   extracted: ExtractedDocument;
   path?: string;
-  /** Called when user clicks a block (whole paragraph selected). */
   onBlockSelect?: (block: DocBlock) => void;
-  /** Optional: copy block text into the active summary (future drag-drop uses this). */
   onSendToSummary?: (block: DocBlock) => void;
 };
 
-/**
- * Renders an extracted research document as a tree of selectable blocks.
- * For PDFs also shows a native browser PDF pane via /api/files/raw.
- */
+type ViewMode = "blocks" | "pages" | "split";
+
 function ResearchViewer({
   extracted,
   path,
@@ -22,12 +19,11 @@ function ResearchViewer({
   onSendToSummary,
 }: ResearchViewerProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [mode, setMode] = useState<"blocks" | "pdf" | "split">(
-    extracted.kind === "pdf" ? "split" : "blocks"
+  const canPages =
+    !!path && (extracted.kind === "pdf" || extracted.kind === "docx");
+  const [mode, setMode] = useState<ViewMode>(
+    canPages ? "pages" : "blocks"
   );
-
-  const rawUrl =
-    path && extracted.kind === "pdf" ? api.rawFileUrl(path) : null;
 
   function selectBlock(block: DocBlock) {
     setSelectedId(block.id);
@@ -44,9 +40,9 @@ function ResearchViewer({
         {extracted.page_count != null && (
           <span className="text-[var(--muted)]">{extracted.page_count} pages</span>
         )}
-        {extracted.kind === "pdf" && rawUrl && (
+        {canPages && (
           <div className="ml-auto flex gap-1">
-            {(["blocks", "pdf", "split"] as const).map((m) => (
+            {(["blocks", "pages", "split"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
@@ -58,7 +54,7 @@ function ResearchViewer({
                     : "text-[var(--muted)] hover:bg-[var(--hover)]")
                 }
               >
-                {m}
+                {m === "pages" ? "view" : m}
               </button>
             ))}
           </div>
@@ -104,13 +100,7 @@ function ResearchViewer({
                   <div className="flex items-start gap-2">
                     <div className="flex-1 min-w-0">
                       {block.type === "heading" && (
-                        <p
-                          className="font-semibold text-[var(--text-h)]"
-                          style={{
-                            fontSize:
-                              18 - Math.min(Number(block.meta?.level ?? 1), 4),
-                          }}
-                        >
+                        <p className="font-semibold text-[var(--text-h)]">
                           {block.text}
                         </p>
                       )}
@@ -122,21 +112,26 @@ function ResearchViewer({
                           {block.text}
                         </p>
                       )}
-                      {(block.type === "paragraph" || block.type === "code_line") && (
+                      {(block.type === "paragraph" ||
+                        block.type === "code_line") && (
                         <p className="text-[var(--text)] whitespace-pre-wrap leading-relaxed">
                           {block.text || (
-                            <span className="text-[var(--muted)] italic">(empty)</span>
+                            <span className="text-[var(--muted)] italic">
+                              (empty)
+                            </span>
                           )}
                         </p>
                       )}
                       {page != null && (
-                        <span className="text-[10px] text-[var(--muted)]">p.{page}</span>
+                        <span className="text-[10px] text-[var(--muted)]">
+                          p.{page}
+                        </span>
                       )}
                     </div>
                     {onSendToSummary && block.text && (
                       <button
                         type="button"
-                        title="Send block to summary"
+                        title="Append block to summary"
                         className="opacity-0 group-hover:opacity-100 text-xs px-1.5 py-0.5 rounded bg-[var(--accent)] text-white shrink-0"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -153,13 +148,15 @@ function ResearchViewer({
           </div>
         )}
 
-        {(mode === "pdf" || mode === "split") && rawUrl && (
-          <div className={mode === "split" ? "w-1/2" : "w-full"}>
-            <iframe
-              title={extracted.title}
-              src={rawUrl}
-              className="w-full h-full border-0 bg-white"
-            />
+        {(mode === "pages" || mode === "split") && path && extracted.kind === "pdf" && (
+          <div className={mode === "split" ? "w-1/2 min-h-0" : "w-full min-h-0"}>
+            <PdfBlobViewer path={path} title={extracted.title} />
+          </div>
+        )}
+
+        {(mode === "pages" || mode === "split") && path && extracted.kind === "docx" && (
+          <div className={mode === "split" ? "w-1/2 min-h-0" : "w-full min-h-0"}>
+            <DocxHtmlViewer path={path} title={extracted.title} />
           </div>
         )}
       </div>
