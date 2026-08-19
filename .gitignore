@@ -1,25 +1,23 @@
-# Node
+# Wails build artifacts
+build/bin/
+frontend/dist/
+
+# Node dependencies
+frontend/node_modules/
 node_modules/
-dist/
-.vite/
 
-# Python
-__pycache__/
-*.py[cod]
-.venv/
-venv/
+# Go binaries and tools
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
 
-# Environment
+# Local environment variables
 .env
-.env.*
+.env.local
 
-# Editor
-.vscode/
-.idea/
+go.sum
 
-# Application data
-workspace/*
 
-# OS
-.DS_Store
-Thumbs.db
