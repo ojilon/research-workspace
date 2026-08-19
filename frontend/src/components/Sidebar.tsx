@@ -1,5 +1,4 @@
 import FileTree from "./FileTree";
-import { sampleTree } from "../data/sampleTree";
 import type { FileTreeNode } from "../types";
 
 type SidebarProps = {
@@ -9,11 +8,15 @@ type SidebarProps = {
   selectedId?: string;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  /** Live nodes from GET /api/tree (empty while loading / offline). */
+  nodes: FileTreeNode[];
+  loading?: boolean;
+  backendOk: boolean;
+  onRefresh: () => void;
 };
 
 /**
- * Left sidebar: file tree + collapse control.
- * Width is controlled by the parent via useResizable.
+ * Left sidebar: live file tree from the local storage root.
  */
 function Sidebar({
   width,
@@ -22,6 +25,10 @@ function Sidebar({
   selectedId,
   collapsed,
   onToggleCollapse,
+  nodes,
+  loading,
+  backendOk,
+  onRefresh,
 }: SidebarProps) {
   if (collapsed) {
     return (
@@ -43,7 +50,6 @@ function Sidebar({
       className="relative shrink-0 flex flex-col border-r border-[var(--border)] bg-[var(--panel)]"
       style={{ width }}
     >
-      {/* Header row */}
       <div className="flex items-center justify-between px-3 h-9 border-b border-[var(--border)] shrink-0">
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
           Explorer
@@ -51,10 +57,12 @@ function Sidebar({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            title="New folder (coming soon)"
-            className="w-6 h-6 rounded text-[var(--muted)] hover:bg-[var(--hover)] text-sm"
+            title="Refresh tree"
+            onClick={onRefresh}
+            disabled={!backendOk || loading}
+            className="w-6 h-6 rounded text-[var(--muted)] hover:bg-[var(--hover)] text-sm disabled:opacity-40"
           >
-            +
+            ↻
           </button>
           <button
             type="button"
@@ -67,16 +75,20 @@ function Sidebar({
         </div>
       </div>
 
-      {/* Tree */}
       <div className="flex-1 overflow-auto py-1">
-        <FileTree
-          nodes={sampleTree}
-          onOpen={onOpenNode}
-          selectedId={selectedId}
-        />
+        {!backendOk && (
+          <p className="px-3 py-2 text-sm text-[var(--muted)]">
+            Backend offline. Start FastAPI to load your D: storage folder.
+          </p>
+        )}
+        {backendOk && loading && (
+          <p className="px-3 py-2 text-sm text-[var(--muted)]">Loading…</p>
+        )}
+        {backendOk && !loading && (
+          <FileTree nodes={nodes} onOpen={onOpenNode} selectedId={selectedId} />
+        )}
       </div>
 
-      {/* Drag handle on the right edge */}
       <div
         onMouseDown={onResizeStart}
         className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[var(--accent)] transition-colors"
