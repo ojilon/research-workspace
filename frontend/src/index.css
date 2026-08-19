@@ -1,4 +1,43 @@
-*{
+@import "tailwindcss";
+
+/* -------------------------------------------------------------------------- */
+/* Theme tokens – switch via data-theme on <html>                             */
+/* -------------------------------------------------------------------------- */
+
+:root,
+[data-theme="light"] {
+  --bg: #f8f9fb;
+  --panel: #ffffff;
+  --text: #2c2f36;
+  --text-h: #111318;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --hover: #f3f4f6;
+  --hover-strong: #e5e7eb;
+  --accent: #4f46e5;
+  --accent-muted: #eef2ff;
+}
+
+[data-theme="dark"] {
+  --bg: #0f1115;
+  --panel: #161a22;
+  --text: #c8cdd8;
+  --text-h: #f0f2f7;
+  --muted: #8b93a7;
+  --border: #2a303c;
+  --hover: #1e2430;
+  --hover-strong: #2a303c;
+  --accent: #818cf8;
+  --accent-muted: #1e1b4b;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Base                                                                       */
+/* -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -6,23 +45,40 @@ html,
 body,
 #root {
   margin: 0;
-  min-height: 100%;
+  height: 100%;
 }
 
 body {
-  font-family: sans-serif;
+  font-family:
+    "Inter",
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
 }
 
-.app {
-  min-height: 100vh;
+/* Scrollbars (subtle) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
 }
 
-.workspace {
-  display: flex;
-  min-height: calc(100vh - 60px);
-}
-
-.workspace > * {
-  border: 1px solid #ccc;
-  padding: 16px;
+/* Utility used by some components */
+.prose-like p {
+  max-width: 70ch;
 }
