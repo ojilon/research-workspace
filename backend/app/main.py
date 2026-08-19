@@ -1,8 +1,12 @@
 """
-Research Workspace API.
+Research Workspace API (+ optional packaged UI).
 
-Run:
+Dev:
     uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+
+Packaged (from repo root):
+    Start-Research-Workspace.bat
+    or: backend\.venv\Scripts\python.exe run_app.py
 """
 
 from __future__ import annotations
@@ -12,13 +16,14 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.documents import extract_document, file_kind
 from app.render import docx_to_html
 from app.shell import open_in_explorer, save_as_dialog
+from app.static_ui import mount_frontend
 from app.storage import ensure_storage_root, resolve_default_storage_root
 
 app = FastAPI(
@@ -227,7 +232,6 @@ def documents_extract(relative_path: str) -> dict[str, Any]:
 
 @app.get("/api/documents/html")
 def documents_html(relative_path: str) -> HTMLResponse:
-    """Readable HTML for DOCX (headings, bold/italic, tables)."""
     root = current_root()
     target = safe_join(root, relative_path)
     if not target.is_file():
@@ -243,10 +247,6 @@ def documents_html(relative_path: str) -> HTMLResponse:
 
 @app.get("/api/files/raw")
 def files_raw(relative_path: str) -> Response:
-    """
-    Stream the original file with headers that allow the browser to
-    display PDFs (fetch → blob URL on the frontend avoids iframe CORS).
-    """
     root = current_root()
     target = safe_join(root, relative_path)
     if not target.is_file():
@@ -301,11 +301,6 @@ def shell_reveal(body: RevealBody) -> dict[str, str]:
 
 @app.post("/api/shell/save-as")
 def shell_save_as(body: SaveAsBody = SaveAsBody()) -> dict[str, Any]:
-    """
-    Native Windows Save As dialog (name + extension).
-    Creates the file if needed and returns its path relative to storage root
-    when the choice is under the storage root; otherwise returns absolute path.
-    """
     root = current_root()
     start = root
     if body.relative_dir.strip():
@@ -334,3 +329,7 @@ def shell_save_as(body: SaveAsBody = SaveAsBody()) -> dict[str, Any]:
         "under_root": under_root,
         "name": chosen.name,
     }
+
+
+# Packaged UI last so /api/* always wins
+_UI_MOUNTED = mount_frontend(app)
