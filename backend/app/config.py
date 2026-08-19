@@ -2,13 +2,21 @@
 Application settings.
 
 STORAGE_ROOT is the folder on disk where documents, summaries,
-and bookmarks live. The user picks this once (or we default to
-~/ResearchWorkspace).
+and bookmarks live.
+
+Default resolution (see storage.py):
+  1. STORAGE_ROOT environment variable, if set
+  2. D:\\ResearchWorkspace  (preferred when D: is available and writable)
+  3. ~/ResearchWorkspace     (fallback, usually on C:)
+
+Can also be changed at runtime with POST /api/settings/storage-root.
 """
 
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.storage import resolve_default_storage_root
 
 
 class Settings(BaseSettings):
@@ -18,9 +26,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Default local storage root. Override with STORAGE_ROOT env var
-    # or POST /api/settings/storage-root from the frontend.
-    storage_root: Path = Path.home() / "ResearchWorkspace"
+    # Resolved once at import; POST /api/settings/storage-root can override later.
+    storage_root: Path = resolve_default_storage_root()
 
     # CORS – Vite dev server
     cors_origins: list[str] = [
