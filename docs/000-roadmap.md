@@ -22,36 +22,32 @@ Organize references
 Export document
 ```
 
-## Phase 1 — Foundation (done on `restructure`)
+## Phase 1 — Foundation (done)
 
 - [x] Frontend (Vite + React + TS + Tailwind)
 - [x] Light / dark theme
 - [x] Resizable file tree + dual panes with tabs
-- [x] Summary pane: new tab = editable note
-- [x] Ctrl+S → save note into storage root
-- [x] FastAPI + `.venv` setup
-- [x] Storage root prefers **D:\ResearchWorkspace**, falls back to C:/home
-- [x] Save link as `.url` bookmark
-- [x] **Live file tree** from `GET /api/tree`
-- [x] Open `.md` / `.txt` from tree into summary note tabs
-- [x] Open `.url` bookmarks into browser tabs
-- [ ] UI control to change storage root path
-- [ ] Create folder from the sidebar
+- [x] Summary pane notes + Ctrl+S
+- [x] FastAPI + `.venv`
+- [x] Storage root prefers **D:\ResearchWorkspace**
+- [x] Live file tree, bookmarks, Explorer / Save As
+- [x] **One-click start** (`Start-Research-Workspace.bat`)
 
-## Phase 2 — Research Workspace (next)
+## Phase 2 — Documents (done for MVP)
 
-- PDF open + text extraction (`pypdf`)
-- DOCX open (`python-docx`)
-- Simple frontend PDF viewer (later)
-- Create folder / rename from UI
-- Drag text from centre → summary (copy assist)
+- [x] PDF extract + page view (selectable text)
+- [x] DOCX extract + HTML page view
+- [x] Block tree + insert into summary at caret
+- [x] Code viewer with line numbers
+- [ ] OCR for scanned PDFs (later)
+- [ ] Full DOCX export with images (later)
 
-## Phase 3 — Documents
+## Phase 3 — Documents polish (optional next)
 
-- Better Markdown rendering
+- Better Markdown preview
 - Images in notes
 - References section
-- DOCX / PDF export
+- DOCX / PDF export of summaries
 
 ## Phase 4 — Intelligent Assistance (later)
 
@@ -64,8 +60,9 @@ Export document
 - Topics & source groups
 - Search
 - Cross-source summaries
-- Version history
 
 ## Rule
 
 Each phase must produce usable software before the next begins.
+
+**Current status:** usable foundation + documents + packaging. Ready for daily school reading sessions.
