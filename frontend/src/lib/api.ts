@@ -1,7 +1,3 @@
-/**
- * Thin fetch wrapper for the Research Workspace FastAPI backend.
- */
-
 import type { ExtractedDocument, FileTreeNode } from "../types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
@@ -53,9 +49,11 @@ export const api = {
       `/api/documents/extract?relative_path=${encodeURIComponent(relative_path)}`
     ),
 
-  /** URL suitable for <iframe> / <embed> PDF viewing. */
   rawFileUrl: (relative_path: string) =>
     `${BASE}/api/files/raw?relative_path=${encodeURIComponent(relative_path)}`,
+
+  documentHtmlUrl: (relative_path: string) =>
+    `${BASE}/api/documents/html?relative_path=${encodeURIComponent(relative_path)}`,
 
   saveBookmark: (folder: string, title: string, url: string) =>
     request<{ path: string }>("/api/bookmarks", {
@@ -73,5 +71,18 @@ export const api = {
     request<{ opened: string }>("/api/shell/reveal", {
       method: "POST",
       body: JSON.stringify({ relative_path }),
+    }),
+
+  /** Native Windows Save As (name + extension). */
+  saveAs: (default_name = "Untitled.md", relative_dir = "") =>
+    request<{
+      cancelled: boolean;
+      path?: string;
+      absolute?: string;
+      under_root?: boolean;
+      name?: string;
+    }>("/api/shell/save-as", {
+      method: "POST",
+      body: JSON.stringify({ default_name, relative_dir }),
     }),
 };
