@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
+import { iconForFile } from "../lib/fileIcons";
 import type { FileTreeNode } from "../types";
 
 export type OpenTarget = "center" | "summary";
 
 type FileTreeProps = {
   nodes: FileTreeNode[];
-  /** Left-click default open (centre pane). */
   onOpen: (node: FileTreeNode, target?: OpenTarget) => void;
   selectedId?: string;
   onReveal?: (node: FileTreeNode) => void;
@@ -39,9 +39,7 @@ function TreeNode({
       ? open
         ? "📂"
         : "📁"
-      : node.kind === "link"
-        ? "🔗"
-        : "📄";
+      : iconForFile(node.name, node.fileKind);
 
   return (
     <div>
@@ -51,7 +49,6 @@ function TreeNode({
           if (node.kind === "folder") {
             setOpen((v) => !v);
           } else {
-            // Default: open in the middle (centre) pane
             onOpen(node, "center");
           }
         }}
@@ -110,8 +107,7 @@ function FileTree({ nodes, onOpen, selectedId, onReveal }: FileTreeProps) {
   if (nodes.length === 0) {
     return (
       <p className="px-3 py-2 text-sm text-[var(--muted)]">
-        No files yet. Use 📂 in the header to open Explorer, create folders/files,
-        then press ↻.
+        No files yet. Use 📂 to open Explorer, create folders/files, then ↻.
       </p>
     );
   }
