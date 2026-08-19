@@ -9,6 +9,7 @@ import NoteEditor from "./components/NoteEditor";
 import { useTheme } from "./hooks/useTheme";
 import { useResizable } from "./hooks/useResizable";
 import { api } from "./lib/api";
+import { parseUrlFile } from "./lib/urlFile";
 import type { FileTreeNode, Tab } from "./types";
 
 let tabCounter = 1;
@@ -29,12 +30,26 @@ function defaultNoteContent() {
   return "# Summary\n\n";
 }
 
+function isTextNotePath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return (
+    lower.endsWith(".md") ||
+    lower.endsWith(".txt") ||
+    lower.endsWith(".markdown")
+  );
+}
+
+function isUrlShortcut(path: string): boolean {
+  return path.toLowerCase().endsWith(".url");
+}
+
 /**
  * Root application shell.
  *
- * Centre pane  → document / browser / note tabs
- * Right pane   → independent tab strip; new tab = editable note (draft doc)
- * Ctrl+S       → save active note via FastAPI into the local storage root
+ * - Live file tree from D:\\ResearchWorkspace (or fallback)
+ * - Open .md → note tab on the summary side
+ * - Open .url → browser tab
+ * - Ctrl+S saves note and refreshes the tree
  */
 function App() {
   const { theme, toggleTheme } = useTheme();
@@ -56,8 +71,9 @@ function App() {
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const [storageRoot, setStorageRoot] = useState<string | null>(null);
   const [backendOk, setBackendOk] = useState(false);
+  const [treeNodes, setTreeNodes] = useState<FileTreeNode[]>([]);
+  const [treeLoading, setTreeLoading] = useState(false);
 
-  // ---- Centre pane tabs ----
   const [centerTabs, setCenterTabs] = useState<Tab[]>([
     {
       id: "tab-welcome",
@@ -70,7 +86,6 @@ function App() {
     "tab-welcome"
   );
 
-  // ---- Right (summary) pane tabs ----
   const [summaryTabs, setSummaryTabs] = useState<Tab[]>([
     {
       id: "note-1",
@@ -90,7 +105,20 @@ function App() {
   const activeSummary =
     summaryTabs.find((t) => t.id === activeSummaryId) ?? null;
 
-  // Probe backend once on mount
+  const refreshTree = useCallback(async () => {
+    setTreeLoading(true);
+    try {
+      const data = await api.getTree();
+      setTreeNodes(data.nodes);
+      setStorageRoot(data.root);
+    } catch {
+      setTreeNodes([]);
+    } finally {
+      setTreeLoading(false);
+    }
+  }, []);
+
+  // Connect to backend + load tree
   useEffect(() => {
     api
       .health()
@@ -98,11 +126,14 @@ function App() {
         setBackendOk(true);
         return api.getStorageRoot();
       })
-      .then((r) => setStorageRoot(r.path))
+      .then((r) => {
+        setStorageRoot(r.path);
+        return refreshTree();
+      })
       .catch(() => setBackendOk(false));
-  }, []);
+  }, [refreshTree]);
 
-  // Ctrl+S → save the focused note (prefer summary pane if it has a note)
+  // Ctrl+S
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
@@ -133,29 +164,85 @@ function App() {
     });
   }, []);
 
-  function handleOpenNode(node: FileTreeNode) {
-    setSelectedTreeId(node.id);
+  const openOrFocusSummaryNote = useCallback((tab: Tab) => {
+    setSummaryTabs((prev) => {
+      const existing = prev.find(
+        (t) => t.kind === "note" && t.path && t.path === tab.path
+      );
+      if (existing) {
+        setActiveSummaryId(existing.id);
+        return prev;
+      }
+      setActiveSummaryId(tab.id);
+      return [...prev, tab];
+    });
+  }, []);
 
+  async function handleOpenNode(node: FileTreeNode) {
+    setSelectedTreeId(node.id);
+    if (!node.path) return;
+
+    // Bookmark / .url shortcut
+    if (node.kind === "link" || isUrlShortcut(node.path)) {
+      if (node.url) {
+        openOrFocusCenter({
+          id: createId("tab"),
+          title: node.name.replace(/\.url$/i, ""),
+          kind: "browser",
+          url: node.url,
+          path: node.path,
+        });
+        return;
+      }
+      // Read the .url file to extract the target
+      try {
+        const file = await api.readFile(node.path);
+        const url = parseUrlFile(file.content);
+        if (!url) {
+          window.alert("Could not read URL from shortcut file.");
+          return;
+        }
+        openOrFocusCenter({
+          id: createId("tab"),
+          title: node.name.replace(/\.url$/i, ""),
+          kind: "browser",
+          url,
+          path: node.path,
+        });
+      } catch (err) {
+        window.alert(`Failed to open link: ${err instanceof Error ? err.message : err}`);
+      }
+      return;
+    }
+
+    // Text note → open on the summary side so you can edit while reading
+    if (node.kind === "document" && isTextNotePath(node.path)) {
+      try {
+        const file = await api.readFile(node.path);
+        openOrFocusSummaryNote({
+          id: createId("note"),
+          title: node.name.replace(/\.(md|txt|markdown)$/i, ""),
+          kind: "note",
+          path: node.path,
+          content: file.content,
+          dirty: false,
+        });
+      } catch (err) {
+        window.alert(`Failed to open file: ${err instanceof Error ? err.message : err}`);
+      }
+      return;
+    }
+
+    // Other documents – for now open as read-only demo topic if name matches,
+    // otherwise open as a note with a placeholder message
     if (node.kind === "document") {
-      const topicMap: Record<string, string> = {
-        "doc-growth": "growth",
-        "doc-photosynthesis": "photosynthesis",
-        "doc-notes-1": "water-relations",
-      };
-      const resourceId = topicMap[node.id] ?? "growth";
-      openOrFocusCenter({
-        id: createId("tab"),
-        title: node.name.replace(/\.md$/i, ""),
-        kind: "document",
-        resourceId,
-        path: node.path,
-      });
-    } else if (node.kind === "link") {
-      openOrFocusCenter({
-        id: createId("tab"),
+      openOrFocusSummaryNote({
+        id: createId("note"),
         title: node.name,
-        kind: "browser",
-        url: node.url,
+        kind: "note",
+        path: node.path,
+        content: `# ${node.name}\n\n_Binary or unsupported type for now. PDF/DOCX extraction comes next._\n`,
+        dirty: false,
       });
     }
   }
@@ -214,12 +301,6 @@ function App() {
     );
   }
 
-  /**
-   * Save the active note.
-   * Preference: summary-pane note → centre-pane note.
-   * Uses FastAPI /api/files/save into the storage root.
-   * Filename is derived from the tab title (sanitised) + .md
-   */
   async function handleSave() {
     const target =
       activeSummary?.kind === "note"
@@ -241,11 +322,9 @@ function App() {
 
     const tab = target.tab;
     const safeTitle =
-      (tab.title || "untitled")
-        .replace(/[<>:"/\\|?*]/g, "")
-        .trim() || "untitled";
-    const relative =
-      tab.path ?? `summaries/${safeTitle}.md`;
+      (tab.title || "untitled").replace(/[<>:"/\\|?*]/g, "").trim() ||
+      "untitled";
+    const relative = tab.path ?? `summaries/${safeTitle}.md`;
 
     try {
       const res = await api.saveFile(relative, tab.content ?? "");
@@ -254,6 +333,8 @@ function App() {
       } else {
         updateCenterTab(tab.id, { path: res.path, dirty: false });
       }
+      // Show the new file in the explorer
+      await refreshTree();
     } catch (err) {
       window.alert(`Save failed: ${err instanceof Error ? err.message : err}`);
     }
@@ -266,9 +347,11 @@ function App() {
     }
     try {
       await api.saveBookmark("bookmarks", title || hostnameFromUrl(url), url);
-      window.alert(`Saved link to storage root /bookmarks`);
+      await refreshTree();
     } catch (err) {
-      window.alert(`Save link failed: ${err instanceof Error ? err.message : err}`);
+      window.alert(
+        `Save link failed: ${err instanceof Error ? err.message : err}`
+      );
     }
   }
 
@@ -276,7 +359,6 @@ function App() {
     <div className="h-screen flex flex-col bg-[var(--bg)] text-[var(--text)] overflow-hidden">
       <Header theme={theme} onToggleTheme={toggleTheme} />
 
-      {/* Status strip */}
       <div className="px-3 py-0.5 text-[11px] border-b border-[var(--border)] bg-[var(--panel)] text-[var(--muted)] flex gap-4 shrink-0">
         <span>
           Backend:{" "}
@@ -289,7 +371,7 @@ function App() {
             Storage: {storageRoot}
           </span>
         )}
-        <span className="ml-auto">Ctrl+S = save active note</span>
+        <span className="ml-auto">Ctrl+S = save · ↻ refreshes tree</span>
       </div>
 
       <div className="flex flex-1 min-h-0">
@@ -300,9 +382,12 @@ function App() {
           selectedId={selectedTreeId}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          nodes={treeNodes}
+          loading={treeLoading}
+          backendOk={backendOk}
+          onRefresh={() => void refreshTree()}
         />
 
-        {/* Centre pane */}
         <main className="flex-1 flex flex-col min-w-0 bg-[var(--bg)]">
           <TabBar
             tabs={centerTabs}
@@ -337,7 +422,11 @@ function App() {
               <NoteEditor
                 title={activeCenter.title}
                 content={activeCenter.content ?? ""}
-                status={activeCenter.dirty ? "unsaved" : activeCenter.path ?? "draft"}
+                status={
+                  activeCenter.dirty
+                    ? "unsaved"
+                    : activeCenter.path ?? "draft"
+                }
                 onTitleChange={(title) =>
                   updateCenterTab(activeCenter.id, { title, dirty: true })
                 }
@@ -348,7 +437,7 @@ function App() {
             )}
             {!activeCenter && (
               <div className="h-full flex items-center justify-center text-[var(--muted)] text-sm">
-                Open a document from the file tree or create a new browser tab.
+                Open a file from the explorer or create a new browser tab.
               </div>
             )}
           </div>
