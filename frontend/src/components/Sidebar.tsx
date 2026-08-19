@@ -1,26 +1,20 @@
-const topics = [
-    {
-        id:"groewth",
-        name: "Growth",
-    },
-    {
-        id: "water-relations",
-        name: "Water Relations",
-    },
-    {
-        id:"photosynthesis",
-        name:"Photosynthesis",
-    },
-]
+import { topics } from "../data/topics"
 
-function Sidebar() {
+function Sidebar({selectedTopic, setSelectedTopic}) {
   return (
     <aside>
-      <h2>Plant physiology</h2>
+      <h2>Plant Physiology</h2>
 
       <ul>
         {topics.map((topic) => (
-            <li key={topic.id}>{topic.name}</li>
+          <li 
+            key={topic.id} 
+            onClick={() => setSelectedTopic(topic.id)}
+            style={{
+                fontWeight: selectedTopic === topic.id ? "bold": "normal",
+            }}
+            >
+            {topic.name}</li>
         ))}
       </ul>
     </aside>
