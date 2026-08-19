@@ -6,12 +6,14 @@ import TabBar from "./components/TabBar";
 import MainPanel from "./components/MainPanel";
 import BrowserTab from "./components/BrowserTab";
 import NoteEditor from "./components/NoteEditor";
+import ResearchViewer from "./components/ResearchViewer";
+import CodeViewer from "./components/CodeViewer";
 import type { OpenTarget } from "./components/FileTree";
 import { useTheme } from "./hooks/useTheme";
 import { useResizable } from "./hooks/useResizable";
 import { api } from "./lib/api";
 import { parseUrlFile } from "./lib/urlFile";
-import type { FileTreeNode, Tab } from "./types";
+import type { DocBlock, FileTreeNode, Tab } from "./types";
 
 let tabCounter = 1;
 
@@ -44,6 +46,20 @@ function isUrlShortcut(path: string): boolean {
   return path.toLowerCase().endsWith(".url");
 }
 
+function isResearchPath(path: string, fileKind?: string): boolean {
+  const k = (fileKind || "").toLowerCase();
+  if (["pdf", "docx", "doc", "code"].includes(k)) return true;
+  const lower = path.toLowerCase();
+  return (
+    lower.endsWith(".pdf") ||
+    lower.endsWith(".docx") ||
+    lower.endsWith(".doc") ||
+    /\.(py|ts|tsx|js|jsx|json|css|html|rs|go|java|c|cpp|h|sh|yml|yaml|toml|sql)$/i.test(
+      lower
+    )
+  );
+}
+
 function App() {
   const { theme, toggleTheme } = useTheme();
 
@@ -53,7 +69,6 @@ function App() {
     maxWidth: 420,
     side: "left",
   });
-  // Wider max so summary can approach ~50% when tree is collapsed
   const right = useResizable({
     initialWidth: 360,
     minWidth: 240,
@@ -99,7 +114,6 @@ function App() {
   const activeSummary =
     summaryTabs.find((t) => t.id === activeSummaryId) ?? null;
 
-  // When sidebar is collapsed, let summary grow so centre + summary ~50/50
   const summaryFlexGrow = sidebarCollapsed && !summaryCollapsed;
 
   const refreshTree = useCallback(async () => {
@@ -162,10 +176,7 @@ function App() {
   const openOrFocusSummary = useCallback((tab: Tab) => {
     setSummaryTabs((prev) => {
       const existing = prev.find(
-        (t) =>
-          t.path &&
-          t.path === tab.path &&
-          t.kind === tab.kind
+        (t) => t.path && t.path === tab.path && t.kind === tab.kind
       );
       if (existing) {
         setActiveSummaryId(existing.id);
@@ -176,10 +187,7 @@ function App() {
     });
   }, []);
 
-  async function openTextAsNote(
-    node: FileTreeNode,
-    target: OpenTarget
-  ) {
+  async function openTextAsNote(node: FileTreeNode, target: OpenTarget) {
     if (!node.path) return;
     const file = await api.readFile(node.path);
     const tab: Tab = {
@@ -189,6 +197,21 @@ function App() {
       path: node.path,
       content: file.content,
       dirty: false,
+    };
+    if (target === "summary") openOrFocusSummary(tab);
+    else openOrFocusCenter(tab);
+  }
+
+  async function openResearchDoc(node: FileTreeNode, target: OpenTarget) {
+    if (!node.path) return;
+    const extracted = await api.extractDocument(node.path);
+    const tab: Tab = {
+      id: createId("research"),
+      title: extracted.title || node.name,
+      kind: "research",
+      path: node.path,
+      extracted,
+      fileKind: extracted.kind,
     };
     if (target === "summary") openOrFocusSummary(tab);
     else openOrFocusCenter(tab);
@@ -227,28 +250,61 @@ function App() {
         return;
       }
 
+      if (isResearchPath(node.path, node.fileKind)) {
+        await openResearchDoc(node, target);
+        return;
+      }
+
       if (node.kind === "document" && isTextNotePath(node.path)) {
         await openTextAsNote(node, target);
         return;
       }
 
       if (node.kind === "document") {
-        const tab: Tab = {
-          id: createId("note"),
-          title: node.name,
-          kind: "note",
-          path: node.path,
-          content: `# ${node.name}\n\n_Binary or unsupported type for now. PDF/DOCX support is next._\n`,
-          dirty: false,
-        };
-        if (target === "summary") openOrFocusSummary(tab);
-        else openOrFocusCenter(tab);
+        // Try extract anyway (images etc. may warn)
+        try {
+          await openResearchDoc(node, target);
+        } catch {
+          const tab: Tab = {
+            id: createId("note"),
+            title: node.name,
+            kind: "note",
+            path: node.path,
+            content: `# ${node.name}\n\n_Could not extract this file type._\n`,
+            dirty: false,
+          };
+          if (target === "summary") openOrFocusSummary(tab);
+          else openOrFocusCenter(tab);
+        }
       }
     } catch (err) {
       window.alert(
         `Failed to open: ${err instanceof Error ? err.message : err}`
       );
     }
+  }
+
+  /** Append a selected research block into the active summary note. */
+  function sendBlockToSummary(block: DocBlock) {
+    if (!block.text.trim()) return;
+    let note = activeSummary?.kind === "note" ? activeSummary : null;
+    if (!note) {
+      const id = createId("note");
+      note = {
+        id,
+        title: "Untitled summary",
+        kind: "note",
+        content: defaultNoteContent(),
+        dirty: true,
+      };
+      setSummaryTabs((prev) => [...prev, note!]);
+      setActiveSummaryId(id);
+    }
+    const addition = `\n\n${block.text.trim()}\n`;
+    updateSummaryTab(note.id, {
+      content: (note.content ?? "") + addition,
+      dirty: true,
+    });
   }
 
   async function handleOpenExplorer() {
@@ -332,12 +388,6 @@ function App() {
     );
   }
 
-  /**
-   * Ctrl+S behaviour:
-   * - If the note already has a path (opened or previously saved) → save in place.
-   * - If first save (no path) → ask for a relative name, save under storage root,
-   *   then optionally open Explorer so you can see it.
-   */
   async function handleSave() {
     const target =
       activeSummary?.kind === "note"
@@ -351,9 +401,7 @@ function App() {
       return;
     }
     if (!backendOk) {
-      window.alert(
-        "Backend is not running.\nStart uvicorn in the backend folder."
-      );
+      window.alert("Backend is not running.");
       return;
     }
 
@@ -361,18 +409,20 @@ function App() {
     let relative = tab.path;
 
     if (!relative) {
-      // First save – ask for a path under the storage root
       const safeTitle =
         (tab.title || "untitled").replace(/[<>:"/\\|?*]/g, "").trim() ||
         "untitled";
       const suggested = `summaries/${safeTitle}.md`;
       const answer = window.prompt(
-        `First save – relative path under:\n${storageRoot ?? "storage root"}\n\n(Leave as-is or change; file will be created there.)`,
+        `First save – relative path under:\n${storageRoot ?? "storage root"}`,
         suggested
       );
-      if (!answer) return; // cancelled
+      if (!answer) return;
       relative = answer.replace(/^[/\\]+/, "").replace(/\\/g, "/");
-      if (!relative.toLowerCase().endsWith(".md") && !relative.toLowerCase().endsWith(".txt")) {
+      if (
+        !relative.toLowerCase().endsWith(".md") &&
+        !relative.toLowerCase().endsWith(".txt")
+      ) {
         relative += ".md";
       }
     }
@@ -380,17 +430,11 @@ function App() {
     try {
       const res = await api.saveFile(relative, tab.content ?? "");
       if (target.pane === "summary") {
-        updateSummaryTab(tab.id, {
-          path: res.path,
-          dirty: false,
-          title: tab.title || res.path.split("/").pop() || tab.title,
-        });
+        updateSummaryTab(tab.id, { path: res.path, dirty: false });
       } else {
         updateCenterTab(tab.id, { path: res.path, dirty: false });
       }
       await refreshTree();
-
-      // First-time save: show the file in Explorer so the user sees where it landed
       if (!tab.path) {
         try {
           await api.reveal(res.path);
@@ -418,6 +462,26 @@ function App() {
     }
   }
 
+  function renderResearchTab(tab: Tab) {
+    if (!tab.extracted) return null;
+    if (tab.extracted.kind === "code" && tab.extracted.raw != null) {
+      return (
+        <CodeViewer
+          title={tab.extracted.title}
+          language={tab.extracted.language}
+          raw={tab.extracted.raw}
+        />
+      );
+    }
+    return (
+      <ResearchViewer
+        extracted={tab.extracted}
+        path={tab.path}
+        onSendToSummary={sendBlockToSummary}
+      />
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-[var(--bg)] text-[var(--text)] overflow-hidden">
       <Header theme={theme} onToggleTheme={toggleTheme} />
@@ -435,7 +499,7 @@ function App() {
           </span>
         )}
         <span className="ml-auto">
-          Click = open centre · Right-click = choose pane · 📂 = Explorer
+          PDF/DOCX: click block or → to send to summary
         </span>
       </div>
 
@@ -502,9 +566,10 @@ function App() {
                 }
               />
             )}
+            {activeCenter?.kind === "research" && renderResearchTab(activeCenter)}
             {!activeCenter && (
               <div className="h-full flex items-center justify-center text-[var(--muted)] text-sm">
-                Open a file from the explorer (click = centre) or new browser tab.
+                Open a PDF, DOCX, note, or code file from the explorer.
               </div>
             )}
           </div>
