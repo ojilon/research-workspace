@@ -24,18 +24,29 @@ export type Topic = {
   sections: Section[];
 };
 
-/** Tab kinds the centre pane can hold. */
-export type TabKind = "document" | "browser" | "summary";
+/**
+ * Tab kinds:
+ * - document  → demo topic or loaded file (read-oriented for now)
+ * - browser   → URL bar + open external
+ * - note      → editable text (default new tab on the summary side)
+ */
+export type TabKind = "document" | "browser" | "note";
 
-/** One open tab in the centre (or right) pane. */
+/** One open tab in the centre or right pane. */
 export type Tab = {
   id: string;
   title: string;
   kind: TabKind;
-  /** For document tabs: topic id or file path. */
+  /** For document tabs: topic id. */
   resourceId?: string;
+  /** Relative path under storage root (saved notes / files). */
+  path?: string;
   /** For browser tabs: current URL. */
   url?: string;
+  /** Editable body for note tabs (Markdown / plain text). */
+  content?: string;
+  /** Dirty flag – true when content changed since last save. */
+  dirty?: boolean;
 };
 
 /** Node in the local file tree (folder, document, or bookmark/link). */
@@ -43,7 +54,7 @@ export type FileTreeNode = {
   id: string;
   name: string;
   kind: "folder" | "document" | "link";
-  /** Absolute or relative path on disk (local storage root). */
+  /** Relative path under the storage root. */
   path?: string;
   /** For links: the URL to open. */
   url?: string;
