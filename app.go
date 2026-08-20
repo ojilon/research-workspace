@@ -21,7 +21,9 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// Greet returns a greeting for the given name
-func (a *App) Greet(name string) string {
-	return fmt.Sprintf("Hello %s, It's show time!", name)
+//test addition
+func (a *App) Add(n int64, b int64) string {
+	c := n+b
+	d := fmt.Sprint(c)
+	return fmt.Sprintf("Result: %s",d)
 }
