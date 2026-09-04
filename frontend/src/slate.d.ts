@@ -12,11 +12,13 @@ export type CustomText = {
 }
 
 export type ParagraphElement = {
+  id: string
   type: "paragraph"
   children: CustomText[]
 }
 
 export type HeadingElement = {
+  id: string
   type: "heading"
   level: 1 | 2 | 3 | 4 | 5 | 6
   children: CustomText[]

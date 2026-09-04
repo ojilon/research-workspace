@@ -14,6 +14,9 @@ importers:
       react-dom:
         specifier: ^19.1.0
         version: 19.2.8(react@19.2.8)
+      slate:
+        specifier: ^0.126.0
+        version: 0.126.2
       slate-react:
         specifier: ^0.126.4
         version: 0.126.4(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.126.0(slate@0.126.2))(slate@0.126.2)

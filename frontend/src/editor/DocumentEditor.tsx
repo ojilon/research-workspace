@@ -19,6 +19,7 @@ export function DocumentEditor({ document }: Props) {
     toSlate(document)
   )
 
+
   return (
     <Slate
       editor={editor}

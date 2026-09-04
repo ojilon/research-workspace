@@ -28,6 +28,7 @@ function toSlateBlock(block: BlockNode): Descendant {
 
 function paragraphToSlate(node: ParagraphNode): Descendant {
   return {
+    id: node.id,
     type: "paragraph",
     children: node.children.map(toSlateText),
   }
@@ -35,6 +36,7 @@ function paragraphToSlate(node: ParagraphNode): Descendant {
 
 function headingToSlate(node: HeadingNode): Descendant {
   return {
+    id: node.id,
     type: "heading",
     level: node.level,
     children: node.children.map(toSlateText),
