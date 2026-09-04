@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, useCallback } from "react"
 import { createEditor, Descendant } from "slate"
-import { Slate, Editable, withReact } from "slate-react"
+import { Slate, Editable, withReact, RenderElementProps, RenderLeafProps } from "slate-react"
 
 import { DocumentNode } from "../ast/types"
 import { toSlate } from "../ast/toSlate"
@@ -18,7 +18,16 @@ export function DocumentEditor({ document }: Props) {
   const [value, setValue] = useState<Descendant[]>(
     toSlate(document)
   )
+  
+  const renderElement = useCallback(
+      (props: RenderElementProps) => <Element {...props} />,
+      []
+  )
 
+  const renderLeaf = useCallback(
+      (props: RenderLeafProps) => <Leaf {...props} />,
+      []
+  )
 
   return (
     <Slate
@@ -27,8 +36,8 @@ export function DocumentEditor({ document }: Props) {
       onChange={setValue}
     >
       <Editable
-        renderElement={(props) => <Element {...props} />}
-        renderLeaf={(props) => <Leaf {...props} />}
+        renderElement={renderElement}
+        renderLeaf={renderLeaf}
         placeholder="Start typing..."
       />
     </Slate>

@@ -37,7 +37,7 @@ function fromSlateBlock(node: Descendant): BlockNode {
       }
 
     default:
-      throw new Error(`Unsupported node type: ${node.type}`)
+      throw new Error(`Unsupported node type: ${node}`)
   }
 }
 
