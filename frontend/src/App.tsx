@@ -1,15 +1,12 @@
-import './App.css';
-import Calculator from './components/Calculator';
+import { DocumentEditor } from "./editor/DocumentEditor"
+import { sampleDocument } from "./ast/sample"
 
 function App() {
-    return (
-        <div >
-            {/* Separate Isolated Section: Go Calculator Component */}
-            <div>
-                <Calculator />
-            </div>
-        </div>
-    )
+  return (
+    <DocumentEditor
+      document={sampleDocument}
+    />
+  )
 }
 
 export default App
