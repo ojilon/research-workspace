@@ -14,13 +14,16 @@ pub const Editor = struct {
         defer c.end();
         // toolbar
         const bar = ui.div(c).row().wFull().h(30).itemsCenter().gap(8).px(8);
-        defer bar.end();
+        //defer bar.end();
         if (ui.button(c, "Bold", .{ .variant = .ghost, .size = 12 }).clicked) {}
         if (ui.button(c, "Italic", .{ .variant = .ghost, .size = 12 }).clicked) {}
         if (ui.button(c, "Save", .{ .variant = .secondary, .size = 12 }).clicked) {}
         ui.spacer(c);
         ui.label(c, "modified");
         _ = c.leaf(.{ .absolute = true, .offset = .{ .y = 29 }, .width = .fill, .height = .{ .px = 1 }, .background = th.border }, .none, null);
+
+        //close the tool bar before the text area starts
+        bar.end();
         // editor: min height makes the pane look substantial; it scrolls
         // once the text passes max_lines.
         const r = ui.textArea(c, &s.buffer, .{
