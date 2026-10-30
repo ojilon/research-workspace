@@ -59,6 +59,12 @@ class DbTests(unittest.TestCase):
         start, end = top["hit"]
         self.assertEqual(top["snippet"][start:end].lower(), "mitochondria")
 
+    def test_snippet_is_one_line_around_the_hit(self):
+        self.assertEqual(db._snippet("a\nb\nwater here\nmore", ["water"])[0].count("\n"), 0)
+        snip, start, end = db._snippet("one\ntwo\nthree water four\nfive", ["water"])
+        self.assertEqual(snip[start:end], "water")
+        self.assertNotIn("\n", snip)
+
     def test_search_is_case_insensitive_and_multiword(self):
         cli("index", "--root", self.root)
         code, out = cli("search", "--root", self.root, "PAST PAPER")

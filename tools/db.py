@@ -109,7 +109,10 @@ def _tokens(query: str) -> list[str]:
     return [t for t in re.findall(r"[^\s\"'()*:]+", query) if t]
 
 
-def _snippet(text: str, tokens: list[str], width: int = 64):
+def _snippet(text: str, tokens: list[str], width: int = 34):
+    # One line, so a result reads as a sentence and wraps in the panel: the
+    # page's blocks are joined by newlines, which are not wanted here.
+    text = " ".join(text.split())
     lowered = text.lower()
     best = None
     for tok in tokens:

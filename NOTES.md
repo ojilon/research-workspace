@@ -1,128 +1,220 @@
 # revise — work notes
 
-A desktop exam-revision tool in Zig 0.17 on [nanoui](../zigui) (0.8.0), with
-Python doing every file format and the database. This file is the resumption
+A desktop exam-revision tool in Zig 0.17 on [nanoui](../zigui), with Python
+doing every file format and owning the database. This file is the resumption
 point: read it before touching anything.
 
-_Last updated: step B (Python tools complete, Zig shell next)._
+_Last updated: steps A–F done, design pass done. `zig build`, `zig build test`,
+the 40 Python tests and the Windows cross-build all pass._
 
 ## Environment, branches, toolchain
 
 - **Branch.** The session runs on `arena/0e319d6e-research-workspace` (Arena
-  fixes the branch name for a session; a separate `feat/revise-full` could not
-  be created). All work is committed and pushed to that branch only; it was
-  branched from `port/rewrite_to_zig` (`76a92bd`).
+  fixes the branch name for a session; `feat/revise-full` could not be created).
+  All work is committed and pushed to that branch only; it was branched from
+  `port/rewrite_to_zig` (`76a92bd`).
 - **Zig 0.17.0** is installed **outside the repo** from the `ziglang` PyPI
   wheel (ziglang.org is not reachable from this sandbox):
-  `/home/user/zig-venv/lib/python3.11/site-packages/ziglang/zig`, with a
-  wrapper at `/home/user/toolchain/bin/zigw`. The sandbox's `/etc/resolv.conf`
-  has no trailing newline, which makes Zig 0.17's own resolver fail with
-  `ResolvConfParseFailed` when it fetches the lazy `http_zig` dependency.
-  `zigw` runs zig in a private mount namespace with a well-formed copy of that
-  file. **On a normal machine plain `zig` is enough** — use `zig`, not `zigw`.
+  `/home/user/zig-venv/.../ziglang/zig`, with a wrapper at
+  `/home/user/toolchain/bin/zigw`. The sandbox's `/etc/resolv.conf` has no
+  trailing newline, which makes Zig 0.17's resolver fail with
+  `ResolvConfParseFailed` when it lazily fetches `http_zig`; `zigw` runs zig in
+  a private mount namespace with a well-formed copy. **On a normal machine use
+  plain `zig`.**
 - **nanoui** is the sibling clone `/home/user/zigui` (fork `ojilon/zigui`,
-  v0.8.0). `build.zig.zon` keeps the relative path dependency `../zigui`, so
-  the layout on the target machine (app repo and `zigui` side by side) works
-  unchanged.
-- **Python** 3.11 with a repo-local `.venv`
-  (`pip install -r requirements.txt` → pymupdf, python-docx).
-- **Design images are missing.** `docs/design/01-main-dark.png`,
-  `02-search-overlay.png`, `03-add-foreign-file.png`, `04-save-conflict.png`
-  and `05-main-light.png` are **not** in this repository (no branch has a
-  `docs/design/` directory). The layout was therefore built from the written
-  brief (240 px sidebar, tab strip, reader over editor with a draggable
-  divider, one-line status bar) and a dark, flat, 1 px-line style. Nothing was
-  pixel-matched to concept art we could not see.
+  0.8.0). `build.zig.zon` keeps the relative path dependency `../zigui`, which
+  is the layout on the target machine too.
+- **Python** 3.11 in a repo-local `.venv` (`pip install -r requirements.txt` →
+  pymupdf, python-docx). The app looks for `REVISE_PYTHON`, then `.venv` in the
+  opened folder, then `python`, then `py`.
+- **Designs.** The five concepts (2560×1440, from `port/rewrite_to_zig`) are now
+  committed as 1180-wide copies in `docs/design/view_0*.png`. The current
+  screenshots are in `docs/snapshots/`.
 
-## What works now
+## What works
 
-Python tools (all tested, 39 unittest cases):
+**Reading.** A PDF arrives as flowing text pages with a `Page n / N` ruler
+between them; a DOCX as paragraphs in their styles (Heading 1/2, List Bullet).
+Only pages within ±2 of the page being read are drawn, and page heights are
+measured as they scroll, so a jump can land anywhere. Zoom is Ctrl+wheel,
+Ctrl+= / Ctrl+-, Ctrl+0; the reading column keeps a fixed measure on a wide
+window. PgUp/PgDn move by most of a screen, Home/End go to the ends, Ctrl+G
+goes to a page. The status bar's `Page n / N` follows the item at the top of the
+view.
+
+**Summarising.** The bottom pane is a marker-text editor (`# `, `## `, `- `,
+`**bold**`, `*italic**` escaped with `\`), with a toolbar (Bold, Italic, H2,
+bullet, Save) and a real state on the right: `✓ Saved to …`, `• Unsaved
+changes`, `working…`. For a DOCX/PDF, Ctrl+S writes
+`.revise/summaries/<name>-summary.docx` through the save protocol; for a
+`.md`/`.txt` the editor *is* the file. Tabs show a dot while there is unsaved
+text.
+
+**Search.** Ctrl+Shift+F opens the overlay: query on top, `N results across M
+file(s)`, results grouped by file with `p. n` / `¶ n` / `Ln n`, the matched word
+highlighted on a chip, Up/Down to move, Enter to open at that place, Esc to
+close. Ctrl+P quick-opens with a fuzzy match over the folder and linked files.
+
+**Sidebar.** Expandable tree with one-letter type glyphs, `New file`, `New
+folder`, `Find`, and a `Linked files` section. "Add foreign file" (design 03)
+adds any file on disk; it is indexed and searchable like the rest.
+
+**Highlights.** Selecting a block shows the floating toolbar under it —
+`Copy | Highlight | Add to summary`. Highlight writes a `highlights` row and
+washes the block in the highlight colour on reload; `Add to summary` appends
+`- <text>` to the editor.
+
+**Saving.** Ctrl+S runs `tools/save_docx.py` (or `save_text.py`); the status bar
+says `working…`, then the saved path, or the conflict dialog (design 04) with
+Overwrite / Save a copy / Cancel, or the error message. A light theme
+(Ctrl+Shift+D, View → Theme) redraws the whole window in design 05's palette.
+
+**Menu bar.** File / Edit / View / Go / Help in the window, each a flat list of
+commands with their keys. Every item is also a shortcut; a test asserts each
+`Command` appears in exactly one menu.
+
+**Python tools** (40 unittest cases, fixtures generated by `tools/tests/fixtures.py`):
 
 | tool | does |
 | --- | --- |
-| `tools/extract.py` | PDF page/blocks with bbox in reading order; DOCX paragraphs with style and marker text; md/txt lines. Writes `<root>/.revise/cache/<sha1-of-path>.json`. |
-| `tools/save_docx.py` | marker text → DOCX through the whole save-safety protocol (conflict check, backup, temp write + re-extract verify, atomic replace, cache update). |
+| `tools/extract.py` | PDF page/blocks with bbox in reading order; DOCX paragraphs with style and marker text. Writes `<root>/.revise/cache/<sha1-of-path>.json`. |
+| `tools/save_docx.py` | marker text → DOCX through the whole protocol (conflict check, backup, temp write + re-extract verify, atomic replace, cache update). `--overwrite` / `--copy` for the conflict answers. |
 | `tools/save_text.py` | the same protocol for `.md`/`.txt`. |
 | `tools/new_file.py` | creates an empty `.md`/`.txt`/`.docx` (a DOCX starts with a Heading 1 of its name); refuses to overwrite. |
 | `tools/db.py` | SQLite at `<root>/.revise/revise.db`: `init`, `index` (incremental by mtime+size), `files`, `link`, `links`, `search` (FTS5, LIKE fallback), `hl-add`, `hl-list`, `hl-remove`. |
-| `tools/markers.py` | marker ↔ run conversion shared by extract/save (`# `, `## `, `- `, `**bold**`, `*italic*`, backslash escapes). |
+| `tools/markers.py` | marker ↔ run conversion shared by extract/save. |
 | `tools/revise_common.py` | paths, cache keys, atomic JSON/text writes, backups, the one-JSON-object protocol. |
 
-Zig: the phase-1 shell (still the dummy data at this commit — see the steps
-below for what has been replaced).
+## File list
 
-## File list (one line each)
+**Zig (`src/`)** — every module has a doc comment; the ones marked *pure* are
+unit-tested.
 
-**Zig (`src/`)**
-
-- `main.zig` — entry point: flags, window creation, the app's root view.
-- `app.zig` — application state and the frame layout (sidebar | tabs+panes, status bar).
-- `theme.zig` — dark and light themes.
-- `sidebar.zig` — folder tree, linked files, new file/folder rows.
-- `tabs.zig` — dynamic tab strip with close buttons and the unsaved dot.
-- `reader_pane.zig` — PDF pages (windowed) and DOCX paragraphs, zoom, rulers, highlights.
-- `editor_pane.zig` — the summary editor, its toolbar and save status.
+- `main.zig` — entry point: argument parsing, window, `REVISE_DEBUG_LAYOUT`.
+- `app.zig` — `App` state and the whole frame: menu bar, sidebar, tab strip,
+  the reader/editor split with its divider, status bar, overlays, shortcuts,
+  the job queue.
+- `theme.zig` — the dark and light palettes, `highlightColor`, `pick`, `rule`.
+- `menu_bar.zig` — the five menus, the `Command` enum, key hints.
+- `sidebar.zig` — folder tree, new file/folder rows, linked files footer.
+- `tabs.zig` — tab strip: glyph, name, unsaved dot, close, `+`.
+- `reader_pane.zig` — pages and paragraphs, windowing, measured heights, zoom,
+  rulers, highlights, selection rectangles.
+- `editor_pane.zig` — the summary editor, its toolbar, save state.
 - `statusbar.zig` — path, page, words, zoom, key hints, toasts.
-- `overlays.zig` — search, quick open, add-foreign-file, conflict, new-file prompts.
-- `doc.zig` — the extraction JSON model (std.json) and lookups.
-- `paths.zig` — cache/summary/backup paths, sha1 of a path, extension helpers.
-- `fsops.zig` — small file helpers over `std.Io` (read, stat, list).
-- `pybridge.zig` — finding the interpreter and running a tool on a thread, polled once a frame.
-- `markers.zig` — editor markers: bold/italic wrapping, headings, word count.
-- `tabs_state.zig`? — (tabs hold their own state; see `app.zig`)
-- `state.zig` — open documents, per-tab dirty flags, selection, jobs.
-- `tests_*.zig` / `*_test.zig` — `zig test` suites next to the modules they cover.
+- `overlays.zig` — search, quick open, add foreign, conflict, new file/folder,
+  go to page, shortcuts help.
+- `model.zig` *(pure)* — the JSON the tools emit: `Doc`, `Reply`,
+  `HighlightList`, `SearchResults`, `FileList`, word count.
+- `paths.zig` *(pure)* — extensions and kinds, cache keys (sha1 of the absolute
+  path), summary and backup names.
+- `markers.zig` *(pure)* — marker editing: `**`/`*` around a byte range,
+  toggling `# `/`- `, appending bullets, `cpToByte` (Python counts characters,
+  Zig spans count bytes).
+- `fsops.zig` *(pure)* — read/stat/list helpers over `std.Io`.
+- `pybridge.zig` *(pure)* — finding the interpreter, starting a tool on a
+  thread, reading its JSON.
+- `tests.zig` — the test root; add a module here to include its tests.
 
-**Python (`tools/`)** — see the table above; tests in `tools/tests/` with
-fixtures generated by `tools/tests/fixtures.py`.
+**Python** — the table above; `tools/tests/` holds the suites.
+
+**Docs** — `docs/design/view_0*.png` (concepts), `docs/snapshots/*.png`
+(rendered from this code: `main-dark`, `search`, `add-foreign`, `main-light`).
 
 ## Decisions
 
-1. **Markers are the editor's text format**, both for summaries and for `.md`
-   files. `tools/markers.py` owns the conversion so DOCX and marker text stay
+1. **Markers are the editor's text format**, for summaries and for `.md` files.
+   `tools/markers.py` owns the conversion so DOCX and marker text stay
    symmetric; `**`/`*` in ordinary text are escaped with `\`, so a round trip
    never loses characters.
 2. **The summary of a document lives in `<root>/.revise/summaries/<name>-summary.docx`**
    (not beside the source) so the source folder stays clean and the summary
-   never shows up as a source file in the tree. It is created on first save.
+   never shows up as a source file in the tree. Created on first save.
 3. **`kind` gained a third value, `text`**, for `.md`/`.markdown`/`.txt`
-   (schema_version stays 1; unknown kinds are rejected by the app, so it is an
-   additive extension documented here). PDFs use `pages`, everything else
-   `paragraphs`.
-4. **DOCX paragraphs carry both `text` (plain) and `markers`** (the marker
-   form). The reader renders `text` with the paragraph style, search indexes
-   `text`, and the summary editor speaks markers.
-5. **PDF never gets written**, ever: highlights are database rows keyed by
-   block id, drawn on top of the block on reload.
-6. **`mtime` is stored in nanoseconds** (`st_mtime_ns`) so the save protocol
-   cannot miss a same-second change.
-7. **Save conflicts** are reported as `{"conflict":true}` with exit code 0 (a
-   normal answer, not an error); a failed verify is `{"error":"verify failed"}`
-   with a non-zero exit.
-8. **No file deletion anywhere** in the UI (brief), and no in-window menu bar:
-   nanoui's `menu` module is macOS-only (`App.setMenu` calls into objc);
-   keyboard shortcuts are the interface on Windows.
-9. **Light theme** is a second `ui.Theme` value selected at runtime (View →
-   theme) rather than two builds.
-10. **Background work** runs a `std.Thread` that calls `std.process.run` with
-    its own `std.Io.Threaded`, and the view polls an atomic "done" flag once
-    per frame while a job runs (`c.frameIn(0.05)`), so the app still draws
-    zero frames when nothing happens.
+   (schema_version stays 1; it is an additive extension documented here).
+   PDFs use `pages`, everything else `paragraphs`.
+4. **DOCX paragraphs carry both `text` (plain) and `markers`.** The reader
+   renders `text` with the style, search indexes `text`, the editor speaks
+   markers.
+5. **PDF is never written**: highlights are database rows keyed by block id,
+   drawn over the block on reload.
+6. **`mtime` is in nanoseconds** (`st_mtime_ns`) so the save protocol cannot
+   miss a same-second change.
+7. **Save conflicts** are `{"conflict":true}` with exit code 0 (a normal
+   answer); a failed verify is `{"error":"verify failed"}` with a non-zero exit.
+8. **There *is* an in-window menu bar.** This reverses the earlier decision:
+   nanoui's `menu` module is macOS-only, but drawing a bar with `ui.pressable`
+   costs ~30 lines and gives Windows users the File/Edit/View/Go/Help menus the
+   brief asks for. Shortcuts remain the primary interface.
+9. **Light theme** is a second `ui.Theme` selected at runtime, not a second
+   build. Every pane's top-level box sets `.background = th.background`,
+   otherwise the window's default black shows through in light mode.
+10. **Background work** runs a `std.Thread` calling `std.process.run` with its
+    own `std.Io.Threaded`; the view polls an atomic flag once per frame and
+    calls `c.frameIn(0.05)` only while a job runs, so an idle window draws zero
+    frames.
+11. **A reading measure of 880 px** in the reader (design 01): the text column
+    is centred and capped instead of running the full width of a wide window.
+    The two extra `ui.end` calls in `reader_pane.view` belong to those columns —
+    count them before adding a box there.
+12. **The selection toolbar is anchored to the clicked block's rectangle**
+    (`it.rect` stored as `Reader.sel_rect`, toolbar at `x = sel.x + (sel.w - w)/2`,
+    `y = sel.y + sel.h + 6`), not to the selection bounds, because nanoui
+    reports selection for `ui.scroll(.selectable)` only after the frame.
+13. **Anything passed to `ui.richText` must live in frame memory.** Node
+    contents are drawn after the view function returns, so a span slice from a
+    stack array or a `@constCast(&local)` dangles and silently draws nothing.
+    Allocate with `c.alloc().alloc(ui.Span, 1)` and fall back to `ui.text` on
+    OOM. (This is why the search-hit highlight did not appear for hours.)
+14. **Page jumps are applied for three frames** (`Reader.jump_frames`): the
+    offset is a sum of measured heights, and the pages in between are only
+    measured once they have been laid out.
+15. **`REVISE_DEBUG_LAYOUT=1`** prints the pane rectangles and unparsable tool
+    replies to stderr. It stays in the binary (it is free when unset) and is the
+    first thing to reach for when a layout goes wrong.
 
-## Known bugs / open questions
+## UNVERIFIED / faked
 
-- (phase 1, being fixed) tabs were stretched with `.wFull()`; the reader pane
-  was drawn but not closed around its content; fields were `undefined`.
-- The design images are absent (see above); the layout follows the brief.
-- Windows was only checked by cross-compiling, never run.
+- **Windows was never run**, only cross-compiled (`zig build
+  -Dtarget=x86_64-windows-gnu` → `zig-out/bin/revise.exe`). Rendering, the
+  `.venv\Scripts\python.exe` lookup and file dialog are unverified there.
+- The **folder picker** uses nanoui's dialog; on Linux it needs GTK, in the
+  sandbox it was only exercised by typing a path into the overlay.
+- **Real mouse text selection** inside the reader: block-level selection works
+  and `ui.scroll(.selectable)` exposes `c.selection.text`, but selecting a
+  *word range* and highlighting only that range is not implemented (see below).
+- Snapshots are rendered with `NANOUI_RENDERER=cpu`; Direct3D output on a real
+  GPU is unverified.
+- `debug_layout` prints are the only logging; there is no log file.
+
+## Known bugs / rough edges
+
+- Highlights are **block-level**. `ui.scroll(.selectable)` does report selected
+  text, and the `highlights` table has a `text` column, but the drawing looks up
+  a block id, so a partial selection highlights the whole block.
+- Clicking a second block replaces the first highlight in the toolbar's view
+  even though both rows are in the database (only the current block is drawn
+  from `hl-list` at open time; a new highlight appears after a reload).
+- A `.docx` written outside the app is only noticed at save time (that is the
+  protocol), so the reader can show text that has already changed on disk.
+- The `snapshot` build step writes `docs/snapshots/main.png` at 2x
+  (2360×1560, ~14 MB). The committed snapshots are downscaled by hand with
+  `convert -resize 1180x780`.
+- Pressing Ctrl+S in a tab whose tool is still running is ignored silently
+  (`busy`) rather than queued.
+- Markdown lists renumbered/renested inside a DOCX round trip are flattened to
+  `List Bullet` paragraphs (only the four styles in the schema survive).
 
 ## Next five improvements
 
-1. Selection-level highlights once nanoui exposes byte ranges for selectable
-   text (today: block-level, which is what the brief allows).
-2. Incremental PDF rendering cache (layout of wrapped paragraphs per zoom).
-3. Replace the summary editor's plain text with rich spans (bold/italic runs
-   drawn as such, markers still the stored form).
-4. Split-pane persistence per document, plus per-file reading position.
-5. A `--index-only` headless mode that reindexes a folder and exits, for
-   scripting and for the Windows installer.
+1. Character-range highlights: keep `selection.text` plus the block id, store
+   `start`/`end` in the `highlights` table and draw a span background instead of
+   a whole-block wash.
+2. Per-document reading position and split, remembered in `.revise/state.json`
+   (small, hand-written JSON; no new dependency).
+3. Rich editor: draw `**bold**` and `*italic*` runs as such while editing, with
+   markers still the stored form.
+4. A `--index-only` headless mode that reindexes a folder and exits, for
+   scripting and for a Windows shortcut.
+5. Layout cache for wrapped PDF text per (width, zoom) so re-laying out a long
+   page after a zoom is free.
