@@ -1,7 +1,11 @@
 zig-out/
 .zig-cache/
 zig-pkg/
-
+.venv/
+.revise/
+__pycache__/
+*.pyc
+.pytest_cache/
 
 #opencode permission
 opencode.json
